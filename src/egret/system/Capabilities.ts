@@ -235,6 +235,7 @@ namespace egret {
 
     export interface SupportedCompressedTexture {
         pvrtc: boolean;
+        astc: boolean;
         etc1: boolean;
     }
 

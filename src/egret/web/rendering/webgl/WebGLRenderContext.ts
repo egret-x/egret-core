@@ -268,6 +268,7 @@ namespace egret.web {
         //refactor
         private _supportedCompressedTextureInfo: SupportedCompressedTextureInfo[] = [];
         public pvrtc: any;
+        public astc: any;
         public etc1: any;
         private _buildSupportedCompressedTextureInfo(/*gl: WebGLRenderingContext, compressedTextureExNames: string[],*/ extensions: any[]): SupportedCompressedTextureInfo[] {
             // if (compressedTextureExNames.length === 0) {
@@ -343,6 +344,12 @@ namespace egret.web {
             if (this.pvrtc) {
                 this.pvrtc.name = 'WEBGL_compressed_texture_pvrtc';
             }
+
+            this.astc = gl.getExtension('WEBGL_compressed_texture_astc') || gl.getExtension('WEBKIT_WEBGL_compressed_texture_astc');
+            if (this.pvrtc) {
+                this.pvrtc.name = 'WEBGL_compressed_texture_astc';
+            }
+
             //
             this.etc1 = gl.getExtension('WEBGL_compressed_texture_etc1') || gl.getExtension('WEBKIT_WEBGL_compressed_texture_etc1');
             if (this.etc1) {
@@ -352,14 +359,16 @@ namespace egret.web {
             if (egret.Capabilities._supportedCompressedTexture) {
                 egret.Capabilities._supportedCompressedTexture = egret.Capabilities._supportedCompressedTexture || {} as SupportedCompressedTexture;
                 egret.Capabilities._supportedCompressedTexture.pvrtc = !!this.pvrtc;
+                egret.Capabilities._supportedCompressedTexture.astc = !!this.astc;
                 egret.Capabilities._supportedCompressedTexture.etc1 = !!this.etc1;
             } else {
                 (egret.Capabilities as any)['supportedCompressedTexture'] = egret.Capabilities._supportedCompressedTexture || {} as SupportedCompressedTexture;
                 (egret.Capabilities as any)['supportedCompressedTexture'].pvrtc = !!this.pvrtc;
+                (egret.Capabilities as any)['supportedCompressedTexture'].astc = !!this.astc;
                 (egret.Capabilities as any)['supportedCompressedTexture'].etc1 = !!this.etc1;
             }
             //
-            this._supportedCompressedTextureInfo = this._buildSupportedCompressedTextureInfo(/*this.context, compressedTextureExNames,*/[this.etc1, this.pvrtc]);
+            this._supportedCompressedTextureInfo = this._buildSupportedCompressedTextureInfo(/*this.context, compressedTextureExNames,*/[this.etc1,this.astc, this.pvrtc]);
         }
 
 

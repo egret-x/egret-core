@@ -694,6 +694,7 @@ module RES.processor {
         "ktx": KTXTextureProcessor,
         "etc1.ktx": ETC1KTXProcessor,
         "pvrtc.ktx": KTXTextureProcessor,
+        "astc.ktx": KTXTextureProcessor,
         "ttf": TTFProcessor
         // "zip": ZipProcessor
     }
