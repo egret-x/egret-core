@@ -47,6 +47,9 @@ namespace egret.web {
                 }else if (ua.indexOf("android") != -1 && ua.indexOf("linux") != -1) {
                     capabilities["os" + ""] = "Android";
                 }
+                else if (ua.indexOf("harmony") != -1) {
+                    capabilities["os" + ""] = "ohos";
+                }
                 else if (ua.indexOf("windows") != -1) {
                     capabilities["os" + ""] = "Windows Phone";
                 }
