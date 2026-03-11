@@ -53,7 +53,7 @@ namespace egret.web {
         /**
          * @private
          */
-        private onUpdate = (position: Position) => {
+        private onUpdate = (position: any) => {
             let event = new GeolocationEvent(Event.CHANGE);
             let coords = position.coords;
             event.altitude = coords.altitude;

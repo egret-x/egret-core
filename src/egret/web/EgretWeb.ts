@@ -199,7 +199,16 @@ namespace egret.web {
      * @param renderMode
      */
     function setRenderMode(renderMode: string): void {
-        if (renderMode == "webgl" && WebGLUtils.checkCanUseWebGL()) {
+        if (renderMode == "webgpu" && WebGPUUtils.checkCanUseWebGPU()) {
+            // 使用WebGPU渲染
+            sys.RenderBuffer = web.WebGPURenderBuffer;
+            sys.systemRenderer = new WebGPURenderer();
+            sys.canvasRenderer = new CanvasRenderer();
+            sys.customHitTestBuffer = new WebGPURenderBuffer(3, 3);
+            sys.canvasHitTestBuffer = new CanvasRenderBuffer(3, 3);
+            Capabilities["renderMode" + ""] = "webgpu";
+        }
+        else if (renderMode == "webgl" && WebGLUtils.checkCanUseWebGL()) {
             sys.RenderBuffer = web.WebGLRenderBuffer;
             sys.systemRenderer = new WebGLRenderer();
             sys.canvasRenderer = new CanvasRenderer();

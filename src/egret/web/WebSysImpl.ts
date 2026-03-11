@@ -72,6 +72,7 @@ namespace egret.web {
      */
     function mainCanvas(width?: number, height?: number): HTMLCanvasElement {
         let canvas = createCanvas(width, height);
+        
         if (egret.pro.egret2dDriveMode) {
             egret.pro.mainCanvas = canvas;
         }
@@ -96,8 +97,10 @@ namespace egret.web {
         if (!renderContext) {
             return;
         }
-        const webglrendercontext = <WebGLRenderContext>renderContext;
-        const surface = webglrendercontext.surface;
+        const surface = (renderContext as any).surface;
+        if (!surface) {
+            return;
+        }
         if (useMaxSize) {
             if (surface.width < width) {
                 surface.width = width;
@@ -114,7 +117,10 @@ namespace egret.web {
                 surface.height = height;
             }
         }
-        webglrendercontext.onResize();
+        const onResize = (renderContext as any).onResize;
+        if (onResize) {
+            onResize.call(renderContext);
+        }
     }
     egret.sys.resizeContext = resizeContext;
 
@@ -127,7 +133,7 @@ namespace egret.web {
             antialias: WebGLRenderContext.antialias,
             stencil: true//设置可以使用模板（用于不规则遮罩）
         };
-        let gl: CanvasRenderingContext2D | WebGLRenderingContext = null;
+        let gl: any = null;
         //todo 是否使用chrome源码names
         //let contextNames = ["moz-webgl", "webkit-3d", "experimental-webgl", "webgl", "3d"];
         const names = ["webgl", "experimental-webgl"];

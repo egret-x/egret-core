@@ -58,7 +58,7 @@ namespace egret.web {
          * 添加事件监听
          */
         private addListeners():void {
-            if (window.navigator.msPointerEnabled) {
+            if ((window.navigator as any).msPointerEnabled) {
                 this.canvas.addEventListener("MSPointerDown", (event:any)=> {
                     event.identifier = event.pointerId;
                     this.onTouchBegin(event);

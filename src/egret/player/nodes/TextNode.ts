@@ -110,7 +110,14 @@ namespace egret.sys {
          */
         public clean():void {
             if(this.$texture) {
-                WebGLUtils.deleteWebGLTexture(this.$texture);
+                if (Capabilities.renderMode == "webgpu") {
+                    let gpuTex = this.$texture as any;
+                    if (gpuTex && gpuTex.destroy) {
+                        try { gpuTex.destroy(); } catch (e) { }
+                    }
+                } else {
+                    WebGLUtils.deleteWebGLTexture(this.$texture);
+                }
                 this.$texture = null;
                 this.dirtyRender = true;
             }

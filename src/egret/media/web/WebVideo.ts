@@ -286,7 +286,7 @@ namespace egret.web {
         }
 
         private screenChanged = (e): void => {
-            let isfullscreen = document.fullscreenEnabled || document.webkitIsFullScreen;
+            let isfullscreen = document.fullscreenEnabled || (document as any).webkitIsFullScreen;
             if (!isfullscreen) {
                 this.checkFullScreen(false);
 
@@ -557,8 +557,16 @@ namespace egret.web {
                 node.image = bitmapData;
                 node.imageWidth = bitmapData.width;
                 node.imageHeight = bitmapData.height;
-                WebGLUtils.deleteWebGLTexture(bitmapData.webGLTexture);
-                bitmapData.webGLTexture = null;
+                if (Capabilities.renderMode == "webgpu") {
+                    let gpuTex = bitmapData["gpuTexture"] as any;
+                    if (gpuTex && gpuTex.destroy) {
+                        try { gpuTex.destroy(); } catch (e) { }
+                    }
+                    bitmapData["gpuTexture"] = null;
+                } else {
+                    WebGLUtils.deleteWebGLTexture(bitmapData.webGLTexture);
+                    bitmapData.webGLTexture = null;
+                }
                 node.drawImage(0, 0, bitmapData.width, bitmapData.height, 0, 0, width, height);
             }
         }

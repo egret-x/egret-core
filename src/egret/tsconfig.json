@@ -6,7 +6,7 @@
         "allowUnreachableCode": true,
         "newLine": "LF",
         "lib": [
-            "es5",
+            "es2017",
             "dom",
             "es2015.promise",
             "scripthost"

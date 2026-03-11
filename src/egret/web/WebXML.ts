@@ -149,11 +149,12 @@ namespace egret.web {
      * 解析一个节点
      */
     function parseNode(node:Node, parent:XML):XML {
-        if(node.localName=="parsererror"){
+        let element = node as any;
+        if(element.localName=="parsererror"){
             throw new Error(node.textContent);
         }
-        let xml = new XML(node.localName, parent, node["prefix"], node.namespaceURI, node.nodeName);
-        let nodeAttributes = node.attributes;
+        let xml = new XML(element.localName, parent, element["prefix"], element.namespaceURI, node.nodeName);
+        let nodeAttributes = element.attributes;
         let attributes = xml.attributes;
         let length = nodeAttributes.length;
         for (let i = 0; i < length; i++) {

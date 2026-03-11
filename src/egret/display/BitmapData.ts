@@ -250,6 +250,13 @@ namespace egret {
                 egret.WebGLUtils.deleteWebGLTexture(this.webGLTexture);
                 this.webGLTexture = null;
             }
+            if (Capabilities.renderMode == "webgpu" && this["gpuTexture"]) {
+                let gpuTex = this["gpuTexture"] as any;
+                if (gpuTex && gpuTex.destroy) {
+                    gpuTex.destroy();
+                }
+                this["gpuTexture"] = null;
+            }
             //native or WebGLRenderTarget
             if (this.source && this.source.dispose) {
                 this.source.dispose();
