@@ -175,26 +175,27 @@ namespace egret.web {
 
         // ===== resize =====
 
-        public resize(width: number, height: number, useMaxSize?: boolean): void {
-            
-            width = width || 1;
-            height = height || 1;
+         public resize(width: number, height: number, useMaxSize?: boolean): void {
+             
+             width = width || 1;
+             height = height || 1;
 
-            this.context.pushBuffer(this);
+             this.context.pushBuffer(this);
 
-            if (width != this.rootRenderTarget.width || height != this.rootRenderTarget.height) {
-                this.context.drawCmdManager.pushResize(this, width, height);
-                this.rootRenderTarget.width = width;
-                this.rootRenderTarget.height = height;
-            }
+             if (width != this.rootRenderTarget.width || height != this.rootRenderTarget.height) {
+                 this.context.drawCmdManager.pushResize(this, width, height);
+                 // 重要修复：调用 rootRenderTarget.resize() 而不是直接修改宽高
+                 // 这样才能正确销毁和重建纹理
+                 this.rootRenderTarget.resize(width, height);
+             }
 
-            if (this.root) {
-                this.context.resize(width, height, useMaxSize);
-            }
+             if (this.root) {
+                 this.context.resize(width, height, useMaxSize);
+             }
 
-            this.context.clear();
-            this.context.popBuffer();
-        }
+             this.context.clear();
+             this.context.popBuffer();
+         }
 
         // ===== getPixels =====
 

@@ -99,26 +99,36 @@ namespace egret.web {
             this.height = height;
         }
 
-        /**
-         * 调整渲染目标大小
-         */
-        public resize(width: number, height: number): void {
-            this._resize(width, height);
-            // 销毁旧纹理
-            if (this.texture) {
-                this.texture.destroy();
-                this.texture = null;
-                this.textureView = null;
-            }
-            // 销毁旧depth-stencil纹理
-            if (this.depthStencilTexture) {
-                this.depthStencilTexture.destroy();
-                this.depthStencilTexture = null;
-                this.depthStencilTextureView = null;
-            }
-            this._stencilEnabled = false;
-            // 新纹理在下次需要时惰性创建
-        }
+         /**
+           * 调整渲染目标大小
+           */
+          public resize(width: number, height: number): void {
+              this._resize(width, height);
+              // 销毁旧纹理 - 使用延迟销毁避免WebGPU错误
+              const context = WebGPURenderContext.getInstance();
+              if (this.texture) {
+                  // 使用context的延迟销毁机制
+                  context.deleteGPUTexture(this.texture);
+                  this.texture = null;
+                  this.textureView = null;
+              }
+              // 销毁旧depth-stencil纹理
+              // 重要：depthStencil也必须使用延迟销毁机制
+              if (this.depthStencilTexture) {
+                  const dsTexture = this.depthStencilTexture;
+                  this.depthStencilTexture = null;
+                  this.depthStencilTextureView = null;
+                  
+                  // depthStencil纹理也使用延迟销毁
+                  context.deleteGPUTexture(dsTexture);
+              }
+              
+              // 关键修复：如果原来启用了stencil，立即创建新的匹配尺寸的depthStencil纹理
+              // 不要等到enabledStencil被调用，因为那时可能已经有RenderPass在等待
+              if (this._stencilEnabled) {
+                  this.createDepthStencilTexture();
+              }
+          }
 
         /**
          * 激活渲染目标 —— 确保离屏纹理已创建
@@ -168,18 +178,41 @@ namespace egret.web {
             return this.textureView;
         }
 
-        /**
-         * 惰性创建depth-stencil纹理
-         * 对标WebGL中framebuffer上附加的DEPTH_STENCIL renderbuffer
-         * 只在首次需要stencil mask时创建
-         */
-        public enabledStencil(): void {
-            if (this._stencilEnabled) {
-                return;
-            }
-            this._stencilEnabled = true;
-            this.createDepthStencilTexture();
-        }
+         /**
+          * 确保depthStencil纹理尺寸与RenderTarget匹配
+          * 如果尺寸不匹配，销毁旧的并创建新的
+          */
+         public ensureDepthStencilSize(): void {
+             if (this.depthStencilTexture) {
+                 // 检查depthStencil的尺寸是否与renderTarget匹配
+                 if (this.depthStencilTexture.width !== this.width || this.depthStencilTexture.height !== this.height) {
+                     // 尺寸不匹配，销毁旧的
+                     try {
+                         this.depthStencilTexture.destroy();
+                     } catch (e) {
+                         // 忽略销毁失败
+                     }
+                     this.depthStencilTexture = null;
+                     this.depthStencilTextureView = null;
+                 }
+             }
+         }
+
+         /**
+          * 惰性创建depth-stencil纹理
+          * 对标WebGL中framebuffer上附加的DEPTH_STENCIL renderbuffer
+          * 只在首次需要stencil mask时创建
+          * RenderTarget resize时会销毁旧的depthStencil纹理
+          */
+         public enabledStencil(): void {
+             this._stencilEnabled = true;
+             // 先确保尺寸匹配
+             this.ensureDepthStencilSize();
+             // 如果depthStencil纹理不存在（首次或resize后），创建新的
+             if (!this.depthStencilTexture) {
+                 this.createDepthStencilTexture();
+             }
+         }
 
         /**
          * 是否已启用stencil

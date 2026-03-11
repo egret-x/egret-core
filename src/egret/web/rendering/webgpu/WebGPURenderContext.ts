@@ -602,39 +602,44 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
 
         // ===================== 默认管线 =====================
 
-        private createDefaultPipelines(): void {
-            // 为每种blend模式创建texture/primitive管线（不带stencil）
-            for (const blendName in WebGPURenderContext.blendModesForGPU) {
-                const blendState = WebGPURenderContext.blendModesForGPU[blendName];
-                this.pipelineCache['texture_' + blendName] = this.device.createRenderPipeline({
-                    layout: this.pipelineLayoutCache['texture'],
-                    vertex: {
-                        module: this.shaderModuleCache['default_vert'],
-                        entryPoint: 'main',
-                        buffers: [this.vertexBufferLayout],
-                    },
-                    fragment: {
-                        module: this.shaderModuleCache['texture_frag'],
-                        entryPoint: 'main',
-                        targets: [{ format: this.preferredFormat, blend: blendState }],
-                    },
-                    primitive: { topology: 'triangle-list', cullMode: 'none' },
-                });
+         private createDefaultPipelines(): void {
+             // 为每种blend模式创建texture/primitive管线
+             // 注意：标准管线没有depthStencil（不使用stencil时），但由于RenderPass可能在任何时刻具有或不具有depthStencil，
+             // WebGPU要求Pipeline必须明确声明其attachmentState。
+             // 创建两套管线：一套不带depthStencil（用于纯颜色渲染），一套带depthStencil（兼容性更好）
+             for (const blendName in WebGPURenderContext.blendModesForGPU) {
+                 const blendState = WebGPURenderContext.blendModesForGPU[blendName];
+                 
+                 // 标准管线（不附加depthStencil，用于单纯的颜色渲染目标）
+                 this.pipelineCache['texture_' + blendName] = this.device.createRenderPipeline({
+                     layout: this.pipelineLayoutCache['texture'],
+                     vertex: {
+                         module: this.shaderModuleCache['default_vert'],
+                         entryPoint: 'main',
+                         buffers: [this.vertexBufferLayout],
+                     },
+                     fragment: {
+                         module: this.shaderModuleCache['texture_frag'],
+                         entryPoint: 'main',
+                         targets: [{ format: this.preferredFormat, blend: blendState }],
+                     },
+                     primitive: { topology: 'triangle-list', cullMode: 'none' },
+                 });
 
-                this.pipelineCache['primitive_' + blendName] = this.device.createRenderPipeline({
-                    layout: this.pipelineLayoutCache['primitive'],
-                    vertex: {
-                        module: this.shaderModuleCache['default_vert'],
-                        entryPoint: 'main',
-                        buffers: [this.vertexBufferLayout],
-                    },
-                    fragment: {
-                        module: this.shaderModuleCache['primitive_frag'],
-                        entryPoint: 'main',
-                        targets: [{ format: this.preferredFormat, blend: blendState }],
-                    },
-                    primitive: { topology: 'triangle-list', cullMode: 'none' },
-                });
+                 this.pipelineCache['primitive_' + blendName] = this.device.createRenderPipeline({
+                     layout: this.pipelineLayoutCache['primitive'],
+                     vertex: {
+                         module: this.shaderModuleCache['default_vert'],
+                         entryPoint: 'main',
+                         buffers: [this.vertexBufferLayout],
+                     },
+                     fragment: {
+                         module: this.shaderModuleCache['primitive_frag'],
+                         entryPoint: 'main',
+                         targets: [{ format: this.preferredFormat, blend: blendState }],
+                     },
+                     primitive: { topology: 'triangle-list', cullMode: 'none' },
+                 });
 
                 // ===== 带stencil的管线变体 =====
                 // texture + stencil (stencilCompare=equal, stencilOp=keep)
@@ -731,37 +736,86 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
             });
 
             // ===== ETC alpha mask管线 =====
-            const defaultBlendETC = WebGPURenderContext.blendModesForGPU["source-over"];
-            this.pipelineCache['texture_etc_alpha_source-over'] = this.device.createRenderPipeline({
-                layout: this.pipelineLayoutCache['texture_etc_alpha'],
-                vertex: {
-                    module: this.shaderModuleCache['default_vert'],
-                    entryPoint: 'main',
-                    buffers: [this.vertexBufferLayout],
-                },
-                fragment: {
-                    module: this.shaderModuleCache['texture_etc_alphamask_frag'],
-                    entryPoint: 'main',
-                    targets: [{ format: this.preferredFormat, blend: defaultBlendETC }],
-                },
-                primitive: { topology: 'triangle-list', cullMode: 'none' },
-            });
-            // ETC alpha mask + colorTransform filter
-            this.pipelineCache['filter_colorTransform_etc_alpha'] = this.device.createRenderPipeline({
-                layout: this.pipelineLayoutCache['filter_etc_alpha'],
-                vertex: {
-                    module: this.shaderModuleCache['default_vert'],
-                    entryPoint: 'main',
-                    buffers: [this.vertexBufferLayout],
-                },
-                fragment: {
-                    module: this.shaderModuleCache['colorTransform_etc_alphamask_frag'],
-                    entryPoint: 'main',
-                    targets: [{ format: this.preferredFormat, blend: defaultBlendETC }],
-                },
-                primitive: { topology: 'triangle-list', cullMode: 'none' },
-            });
-        }
+             const defaultBlendETC = WebGPURenderContext.blendModesForGPU["source-over"];
+             
+             // ETC alpha mask (不带stencil)
+             this.pipelineCache['texture_etc_alpha_source-over'] = this.device.createRenderPipeline({
+                 layout: this.pipelineLayoutCache['texture_etc_alpha'],
+                 vertex: {
+                     module: this.shaderModuleCache['default_vert'],
+                     entryPoint: 'main',
+                     buffers: [this.vertexBufferLayout],
+                 },
+                 fragment: {
+                     module: this.shaderModuleCache['texture_etc_alphamask_frag'],
+                     entryPoint: 'main',
+                     targets: [{ format: this.preferredFormat, blend: defaultBlendETC }],
+                 },
+                 primitive: { topology: 'triangle-list', cullMode: 'none' },
+             });
+             
+             // ETC alpha mask (带stencil)
+             this.pipelineCache['texture_etc_alpha_source-over_stencil'] = this.device.createRenderPipeline({
+                 layout: this.pipelineLayoutCache['texture_etc_alpha'],
+                 vertex: {
+                     module: this.shaderModuleCache['default_vert'],
+                     entryPoint: 'main',
+                     buffers: [this.vertexBufferLayout],
+                 },
+                 fragment: {
+                     module: this.shaderModuleCache['texture_etc_alphamask_frag'],
+                     entryPoint: 'main',
+                     targets: [{ format: this.preferredFormat, blend: defaultBlendETC }],
+                 },
+                 primitive: { topology: 'triangle-list', cullMode: 'none' },
+                 depthStencil: {
+                     format: 'depth24plus-stencil8',
+                     depthWriteEnabled: false,
+                     depthCompare: 'always',
+                     stencilFront: { compare: 'equal', failOp: 'keep', depthFailOp: 'keep', passOp: 'keep' },
+                     stencilBack: { compare: 'equal', failOp: 'keep', depthFailOp: 'keep', passOp: 'keep' },
+                 },
+             });
+             
+             // ETC alpha mask + colorTransform filter (不带stencil)
+             this.pipelineCache['filter_colorTransform_etc_alpha'] = this.device.createRenderPipeline({
+                 layout: this.pipelineLayoutCache['filter_etc_alpha'],
+                 vertex: {
+                     module: this.shaderModuleCache['default_vert'],
+                     entryPoint: 'main',
+                     buffers: [this.vertexBufferLayout],
+                 },
+                 fragment: {
+                     module: this.shaderModuleCache['colorTransform_etc_alphamask_frag'],
+                     entryPoint: 'main',
+                     targets: [{ format: this.preferredFormat, blend: defaultBlendETC }],
+                 },
+                 primitive: { topology: 'triangle-list', cullMode: 'none' },
+             });
+             
+             // ETC alpha mask + colorTransform filter (带stencil)
+             this.pipelineCache['filter_colorTransform_etc_alpha_stencil'] = this.device.createRenderPipeline({
+                 layout: this.pipelineLayoutCache['filter_etc_alpha'],
+                 vertex: {
+                     module: this.shaderModuleCache['default_vert'],
+                     entryPoint: 'main',
+                     buffers: [this.vertexBufferLayout],
+                 },
+                 fragment: {
+                     module: this.shaderModuleCache['colorTransform_etc_alphamask_frag'],
+                     entryPoint: 'main',
+                     targets: [{ format: this.preferredFormat, blend: defaultBlendETC }],
+                 },
+                 primitive: { topology: 'triangle-list', cullMode: 'none' },
+                 depthStencil: {
+                     format: 'depth24plus-stencil8',
+                     depthWriteEnabled: false,
+                     depthCompare: 'always',
+                     stencilFront: { compare: 'equal', failOp: 'keep', depthFailOp: 'keep', passOp: 'keep' },
+                     stencilBack: { compare: 'equal', failOp: 'keep', depthFailOp: 'keep', passOp: 'keep' },
+                 },
+             });
+         }
 
         // ===================== 滤镜管线 =====================
 
@@ -824,21 +878,31 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
         /**
          * 根据filter类型获取对应的pipeline
          */
-        public getFilterPipeline(filter: Filter, useStencil: boolean = false): GPURenderPipeline {
-            let shaderName: string;
-            if (filter.type === "colorTransform") {
-                shaderName = 'colorTransform_frag';
-            } else if (filter.type === "blurX" || filter.type === "blurY") {
-                shaderName = 'blur_frag';
-            } else if (filter.type === "glow") {
-                shaderName = 'glow_frag';
-            } else {
-                // custom or unknown: fall back to texture pipeline
-                return this.getTexturePipeline("source-over", useStencil);
-            }
-            let key = 'filter_' + shaderName + (useStencil ? '_stencil' : '');
-            return this.pipelineCache[key];
-        }
+         public getFilterPipeline(filter: Filter, useStencil: boolean = false): GPURenderPipeline {
+             let shaderName: string;
+             if (filter.type === "colorTransform") {
+                 shaderName = 'colorTransform_frag';
+             } else if (filter.type === "blurX" || filter.type === "blurY") {
+                 shaderName = 'blur_frag';
+             } else if (filter.type === "glow") {
+                 shaderName = 'glow_frag';
+             } else {
+                 // custom or unknown: fall back to texture pipeline
+                 return this.getTexturePipeline("source-over", useStencil);
+             }
+             let key = 'filter_' + shaderName + (useStencil ? '_stencil' : '');
+             let pipeline = this.pipelineCache[key];
+             // 如果找不到Pipeline，尝试不带stencil的版本作为备选
+             if (!pipeline && useStencil) {
+                 key = 'filter_' + shaderName;
+                 pipeline = this.pipelineCache[key];
+             }
+             // 如果仍然找不到，使用纹理管线作为最后备选
+             if (!pipeline) {
+                 pipeline = this.getTexturePipeline("source-over", useStencil);
+             }
+             return pipeline;
+         }
 
         /**
          * 填充filter uniform buffer并返回对应的bind group
@@ -1483,18 +1547,40 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
             return this.getGPUTexture(bitmapData);
         }
 
-        /**
-         * 释放GPU纹理及其缓存的纹理视图
-         */
-        public deleteGPUTexture(texture: GPUTexture): void {
-            if (!texture) return;
-            this.textureViewCache.delete(texture);
-            try {
-                texture.destroy();
-            } catch (e) {
-                // 纹理可能已被销毁
-            }
-        }
+         /**
+          * 待销毁的纹理队列（延迟销毁以避免WebGPU错误）
+          */
+         private texturesToDestroy: GPUTexture[] = [];
+
+         /**
+          * 释放GPU纹理及其缓存的纹理视图
+          * 使用延迟销毁机制：先标记为待销毁，在下一个合适的时机再实际销毁
+          */
+         public deleteGPUTexture(texture: GPUTexture): void {
+             if (!texture) return;
+             this.textureViewCache.delete(texture);
+             
+             // 不立即销毁，改为延迟销毁
+             // 在下一帧的初始化时批量销毁所有待销毁的纹理
+             if (this.texturesToDestroy.indexOf(texture) === -1) {
+                 this.texturesToDestroy.push(texture);
+             }
+         }
+
+         /**
+          * 处理待销毁的纹理（应该在每帧开始或命令flush之后调用）
+          */
+         private flushDestroyTextures(): void {
+             for (let i = 0; i < this.texturesToDestroy.length; i++) {
+                 const texture = this.texturesToDestroy[i];
+                 try {
+                     texture.destroy();
+                 } catch (e) {
+                     // 纹理可能仍在使用中，忽略错误
+                 }
+             }
+             this.texturesToDestroy.length = 0;
+         }
 
         // ===================== 核心绘制执行 =====================
 
@@ -1519,49 +1605,57 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
          * 开始一个新的render pass
          * 根据是否需要stencil来决定是否附加depthStencil attachment
          */
-        private beginRenderPass(commandEncoder: GPUCommandEncoder, colorView: GPUTextureView,
-            loadOp: GPULoadOp, clearStencil: boolean = false): GPURenderPassEncoder {
-            let depthStencilAttachment: GPURenderPassDepthStencilAttachment = undefined;
-            let renderTarget = this.getCurrentRenderTarget();
+         private beginRenderPass(commandEncoder: GPUCommandEncoder, colorView: GPUTextureView,
+             loadOp: GPULoadOp, clearStencil: boolean = false): GPURenderPassEncoder {
+             let depthStencilAttachment: GPURenderPassDepthStencilAttachment = undefined;
+             let renderTarget = this.getCurrentRenderTarget();
 
-            if (renderTarget && renderTarget.stencilEnabled) {
-                let dsView = renderTarget.getDepthStencilTextureView();
-                if (dsView) {
-                    depthStencilAttachment = {
-                        view: dsView,
-                        depthLoadOp: 'load',
-                        depthStoreOp: 'store',
-                        stencilLoadOp: clearStencil ? 'clear' : 'load',
-                        stencilStoreOp: 'store',
-                        stencilClearValue: 0,
-                    };
-                }
-            }
+             // 为了保持Pipeline和RenderPass的附件状态一致，始终尝试附加depthStencil
+             // 即使当前没有stencil mask，也预先创建depth-stencil纹理以保持一致的attachment state
+             if (renderTarget) {
+                 // 始终启用stencil以保证Pipeline兼容性
+                 // enabledStencil会确保depthStencil的尺寸与renderTarget一致
+                 renderTarget.enabledStencil();
+                 let dsView = renderTarget.getDepthStencilTextureView();
+                 if (dsView) {
+                     depthStencilAttachment = {
+                         view: dsView,
+                         depthLoadOp: 'load',
+                         depthStoreOp: 'store',
+                         stencilLoadOp: clearStencil ? 'clear' : 'load',
+                         stencilStoreOp: 'store',
+                         stencilClearValue: 0,
+                     };
+                 }
+             }
 
-            const renderPassDescriptor: GPURenderPassDescriptor = {
-                colorAttachments: [{
-                    view: colorView,
-                    loadOp: loadOp,
-                    storeOp: 'store' as const,
-                    clearValue: { r: 0, g: 0, b: 0, a: 0 }, // 黑色不透明，方便调试
-                    // clearValue: { r: 1, g: 1, b: 1, a: 1 }, // 白色不透明，方便调试
-                }],
-            };
-            if (depthStencilAttachment) {
-                renderPassDescriptor.depthStencilAttachment = depthStencilAttachment;
-            }
+             const renderPassDescriptor: GPURenderPassDescriptor = {
+                 colorAttachments: [{
+                     view: colorView,
+                     loadOp: loadOp,
+                     storeOp: 'store' as const,
+                     clearValue: { r: 0, g: 0, b: 0, a: 0 }, // 黑色不透明，方便调试
+                     // clearValue: { r: 1, g: 1, b: 1, a: 1 }, // 白色不透明，方便调试
+                 }],
+             };
+             if (depthStencilAttachment) {
+                 renderPassDescriptor.depthStencilAttachment = depthStencilAttachment;
+             }
 
-            const pass = commandEncoder.beginRenderPass(renderPassDescriptor);
-            
-            pass.setVertexBuffer(0, this.vertexGPUBuffer);
-            pass.setIndexBuffer(this.indexGPUBuffer, 'uint16');
-            return pass;
-        }
+             const pass = commandEncoder.beginRenderPass(renderPassDescriptor);
+             
+             pass.setVertexBuffer(0, this.vertexGPUBuffer);
+             pass.setIndexBuffer(this.indexGPUBuffer, 'uint16');
+             return pass;
+         }
 
-        public $drawWebGPU(): void {
-            if (this.drawCmdManager.drawDataLen == 0 || this.contextLost || !this._initialized) {
-                return;
-            }
+         public $drawWebGPU(): void {
+             if (this.drawCmdManager.drawDataLen == 0 || this.contextLost || !this._initialized) {
+                 return;
+             }
+             
+             // 在绘制前先销毁待销毁的纹理
+             this.flushDestroyTextures();
 
             // 确保第一个命令是 ACT_BUFFER
             if (this.drawCmdManager.drawDataLen > 0) {
@@ -1600,20 +1694,22 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
                 this.device.queue.writeBuffer(this.indexGPUBuffer, 0, indices.buffer, indices.byteOffset, indices.byteLength);
             }
 
-            let length = this.drawCmdManager.drawDataLen;
-            let offset = 0;
+             let length = this.drawCmdManager.drawDataLen;
+             let offset = 0;
 
-            // 使用单一commandEncoder减少submit次数
-            let commandEncoder: GPUCommandEncoder = this.device.createCommandEncoder();
-            let renderPassEncoder: GPURenderPassEncoder = null;
-            let currentTargetView: GPUTextureView = null;
-            // 缓存本帧的canvas纹理视图，避免重复创建
-            let canvasTextureView: GPUTextureView = null;
-            // 缓存每个render target的primitive bind group
-            let currentPrimitiveBindGroup: GPUBindGroup = null;
-            // 缓存投影写入状态，避免重复writeBuffer
-            let lastProjectionX: number = NaN;
-            let lastProjectionY: number = NaN;
+             // 使用单一commandEncoder减少submit次数
+             let commandEncoder: GPUCommandEncoder = this.device.createCommandEncoder();
+             let renderPassEncoder: GPURenderPassEncoder = null;
+             let currentTargetView: GPUTextureView = null;
+             // 缓存本帧的canvas纹理视图，避免重复创建
+             let canvasTextureView: GPUTextureView = null;
+             // 缓存每个render target的primitive bind group
+             let currentPrimitiveBindGroup: GPUBindGroup = null;
+             // 缓存投影写入状态，避免重复writeBuffer
+             let lastProjectionX: number = NaN;
+             let lastProjectionY: number = NaN;
+             // 跟踪当前RenderPass是否有depthStencil attachment，以选择兼容的Pipeline
+             let currentRenderPassHasDepthStencil: boolean = false;
 
             
             for (let i = 0; i < length; i++) {
@@ -1622,31 +1718,55 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
 
                 switch (data.type) {
                     case GPU_DRAWABLE_TYPE.ACT_BUFFER: {
-                        // 使用 buffer 的实时尺寸，而不是保存的旧值
-                        let bufferWidth = data.buffer.rootRenderTarget.width;
-                        let bufferHeight = data.buffer.rootRenderTarget.height;
-                        // 结束前一个render pass（不submit，保持在同一commandEncoder）
-                        if (renderPassEncoder) {
-                            renderPassEncoder.end();
-                            // 不在此处submit，让所有命令在同一encoder中批量执行
-                            // 但需要新的encoder因为WebGPU规定一个encoder只能finish一次
-                            this.device.queue.submit([commandEncoder.finish()]);
-                            commandEncoder = this.device.createCommandEncoder();
-                        }
-                        this.activatedBuffer = data.buffer;
+                         // 关键修复：在使用 RenderTarget 之前，确保其所有纹理的尺寸都是最新的
+                         // 特别是 depthStencil 纹理，它可能因为 resize 操作而尺寸不匹配
+                         let bufferWidth: number;
+                         let bufferHeight: number;
 
-                        let targetView: GPUTextureView;
-                        if (data.buffer.root) {
-                            // 使用缓存的canvas纹理视图，每帧只创建一次
-                            if (!canvasTextureView) {
-                                canvasTextureView = this.canvasContext.getCurrentTexture().createView();
-                            }
-                            targetView = canvasTextureView;
-                        } else {
-                            data.buffer.rootRenderTarget.activate();
-                            targetView = data.buffer.rootRenderTarget.getTextureView();
-                        }
-                        currentTargetView = targetView;
+                         if (data.buffer.root) {
+                             let canvasTexture = this.canvasContext.getCurrentTexture();
+                             bufferWidth = canvasTexture.width;
+                             bufferHeight = canvasTexture.height;
+                             
+                             // 对于根缓冲区，必须确保它的 rootRenderTarget 尺寸与真实的 Canvas 纹理尺寸强同步
+                             if (data.buffer.rootRenderTarget.width !== bufferWidth || 
+                                 data.buffer.rootRenderTarget.height !== bufferHeight) {
+                                 data.buffer.rootRenderTarget.width = bufferWidth;
+                                 data.buffer.rootRenderTarget.height = bufferHeight;
+                                 if (typeof data.buffer.rootRenderTarget.resize === 'function') {
+                                     data.buffer.rootRenderTarget.resize(bufferWidth, bufferHeight);
+                                 }
+                             }
+                             // root 也必须确保 DepthStencil 尺寸与当前 Canvas 尺寸一致
+                             data.buffer.rootRenderTarget.ensureDepthStencilSize();
+                         } else {
+                             data.buffer.rootRenderTarget.ensureDepthStencilSize();
+                             bufferWidth = data.buffer.rootRenderTarget.width;
+                             bufferHeight = data.buffer.rootRenderTarget.height;
+                         }
+
+                         // 结束前一个render pass（不submit，保持在同一commandEncoder）
+                         if (renderPassEncoder) {
+                             renderPassEncoder.end();
+                             // 不在此处submit，让所有命令在同一encoder中批量执行
+                             // 但需要新的encoder因为WebGPU规定一个encoder只能finish一次
+                             this.device.queue.submit([commandEncoder.finish()]);
+                             commandEncoder = this.device.createCommandEncoder();
+                         }
+                         this.activatedBuffer = data.buffer;
+
+                         let targetView: GPUTextureView;
+                         if (data.buffer.root) {
+                             // 使用缓存的canvas纹理视图，每帧只创建一次
+                             if (!canvasTextureView) {
+                                 canvasTextureView = this.canvasContext.getCurrentTexture().createView();
+                             }
+                             targetView = canvasTextureView;
+                         } else {
+                             data.buffer.rootRenderTarget.activate();
+                             targetView = data.buffer.rootRenderTarget.getTextureView();
+                         }
+                         currentTargetView = targetView;
 
                         this.onResize(bufferWidth, bufferHeight);
                         // 仅在投影参数变化时写入uniform buffer
@@ -1660,10 +1780,12 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
                             this.invalidatePrimitiveBindGroup();
                         }
 
-                        renderPassEncoder = this.beginRenderPass(commandEncoder, currentTargetView, 'load');
+                         renderPassEncoder = this.beginRenderPass(commandEncoder, currentTargetView, 'load');
+                          // beginRenderPass现在总是附加depthStencil以保证Pipeline兼容性
+                          currentRenderPassHasDepthStencil = true;
 
-                        data.buffer.restoreStencil();
-                        data.buffer.restoreScissor();
+                         data.buffer.restoreStencil();
+                         data.buffer.restoreScissor();
                         break;
                     }
                     case GPU_DRAWABLE_TYPE.TEXTURE: {
@@ -1672,12 +1794,17 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
                         }
 
                         let filter = data.filter;
-                        let stencil = this.useStencil;
+                        // 所有RenderPass现在都有depthStencil attachment，所以总是使用stencil变体的Pipeline
+                        let stencil = true;
 
                         if (filter && (filter.type === "colorTransform" || filter.type === "blurX" ||
                             filter.type === "blurY" || filter.type === "glow")) {
                             // 使用filter-specific pipeline
                             let pipeline = this.getFilterPipeline(filter, stencil);
+                            if (!pipeline) {
+                                console.warn('getFilterPipeline returned null for filter type:', filter.type, 'stencil:', stencil);
+                                break;
+                            }
                             renderPassEncoder.setPipeline(pipeline);
 
                             // group(0): texture bind group
@@ -1741,7 +1868,8 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
                         
                         if (!renderPassEncoder) break;
 
-                        let stencil = this.useStencil;
+                        // 所有RenderPass现在都有depthStencil attachment，所以总是使用stencil变体的Pipeline
+                        let stencil = true;
                         let pipeline = this.getPrimitivePipeline(this.currentBlendMode, stencil);
                         renderPassEncoder.setPipeline(pipeline);
 
@@ -1777,12 +1905,14 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
                         renderTarget.enabledStencil();
 
                         if (buffer.stencilHandleCount == 0) {
-                            // 首次push mask：需要重启render pass以附加depth-stencil
-                            renderPassEncoder.end();
-                            this.device.queue.submit([commandEncoder.finish()]);
-                            commandEncoder = this.device.createCommandEncoder();
-                            renderPassEncoder = this.beginRenderPass(commandEncoder, currentTargetView, 'load', true);
-                        }
+                             // 首次push mask：需要重启render pass以附加depth-stencil
+                             renderPassEncoder.end();
+                             this.device.queue.submit([commandEncoder.finish()]);
+                             commandEncoder = this.device.createCommandEncoder();
+                             renderPassEncoder = this.beginRenderPass(commandEncoder, currentTargetView, 'load', true);
+                             // beginRenderPass总是附加depthStencil
+                             currentRenderPassHasDepthStencil = true;
+                         }
 
                         let level = buffer.stencilHandleCount;
                         buffer.stencilHandleCount++;
@@ -1812,15 +1942,17 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
                         buffer.stencilHandleCount--;
 
                         if (buffer.stencilHandleCount == 0) {
-                            // 所有mask已弹出：重启render pass，不附加depth-stencil
-                            let indexCount = data.count * 3;
-                            offset += indexCount;
+                             // 所有mask已弹出：重启render pass，不附加depth-stencil
+                             let indexCount = data.count * 3;
+                             offset += indexCount;
 
-                            renderPassEncoder.end();
-                            this.device.queue.submit([commandEncoder.finish()]);
-                            commandEncoder = this.device.createCommandEncoder();
-                            renderPassEncoder = this.beginRenderPass(commandEncoder, currentTargetView, 'load');
-                        } else {
+                             renderPassEncoder.end();
+                             this.device.queue.submit([commandEncoder.finish()]);
+                             commandEncoder = this.device.createCommandEncoder();
+                             renderPassEncoder = this.beginRenderPass(commandEncoder, currentTargetView, 'load');
+                             // beginRenderPass总是附加depthStencil
+                             currentRenderPassHasDepthStencil = true;
+                         } else {
                             let level = buffer.stencilHandleCount;
 
                             // 画mask几何：stencil DECR，不写颜色
@@ -1847,23 +1979,60 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
                     case GPU_DRAWABLE_TYPE.RESIZE_TARGET: {
                         data.buffer.rootRenderTarget.resize(data.width, data.height);
                         this.onResize(data.width, data.height);
-                        break;
-                    }
-                    case GPU_DRAWABLE_TYPE.CLEAR_COLOR: {
-                        if (this.activatedBuffer && currentTargetView) {
-                            if (renderPassEncoder) {
-                                renderPassEncoder.end();
+                        
+                        // 防止修改当前正在执行的 RenderTarget 导致后续指令产生 CommandBuffer Invalid 错误
+                        if (this.activatedBuffer === data.buffer && renderPassEncoder) {
+                            renderPassEncoder.end();
+                            data.buffer.rootRenderTarget.ensureDepthStencilSize();
+                            if (data.buffer.root) {
+                                currentTargetView = this.canvasContext.getCurrentTexture().createView();
+                            } else {
+                                currentTargetView = data.buffer.rootRenderTarget.getTextureView();
                             }
-                            renderPassEncoder = this.beginRenderPass(commandEncoder, currentTargetView, 'clear');
+                            renderPassEncoder = this.beginRenderPass(commandEncoder, currentTargetView, 'load');
+                            currentRenderPassHasDepthStencil = true;
                         }
                         break;
                     }
+                     case GPU_DRAWABLE_TYPE.CLEAR_COLOR: {
+                         if (this.activatedBuffer && currentTargetView) {
+                             if (renderPassEncoder) {
+                                 renderPassEncoder.end();
+                             }
+                             renderPassEncoder = this.beginRenderPass(commandEncoder, currentTargetView, 'clear');
+                             // beginRenderPass总是附加depthStencil
+                             currentRenderPassHasDepthStencil = true;
+                         }
+                         break;
+                     }
                     case GPU_DRAWABLE_TYPE.ENABLE_SCISSOR: {
-                        if (renderPassEncoder) {
+                        if (renderPassEncoder && this.activatedBuffer) {
+                            let renderTargetWidth = this.activatedBuffer.rootRenderTarget.width;
+                            let renderTargetHeight = this.activatedBuffer.rootRenderTarget.height;
+                            
                             let x = Math.max(0, Math.floor(data.x));
                             let y = Math.max(0, Math.floor(data.y));
-                            let w = Math.max(1, Math.ceil(data.width));
-                            let h = Math.max(1, Math.ceil(data.height));
+                            let w = Math.ceil(data.width);
+                            let h = Math.ceil(data.height);
+                            
+                            // 先验证起始坐标是否在渲染目标范围内
+                            if (x >= renderTargetWidth || y >= renderTargetHeight) {
+                                // 起始坐标已超出渲染目标，不设置scissor
+                                break;
+                            }
+                            
+                            // 限制右边界和下边界
+                            if (x + w > renderTargetWidth) {
+                                w = renderTargetWidth - x;
+                            }
+                            if (y + h > renderTargetHeight) {
+                                h = renderTargetHeight - y;
+                            }
+                            
+                            // 确保宽度和高度至少为1
+                            w = Math.max(1, w);
+                            h = Math.max(1, h);
+                            
                             renderPassEncoder.setScissorRect(x, y, w, h);
                         }
                         if (this.activatedBuffer) {
