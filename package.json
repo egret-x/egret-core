@@ -177,6 +177,42 @@
           {
             "path": "web/rendering/webgl/shaders/EgretShaderLib.ts",
             "platform": "web"
+          },
+          {
+            "path": "web/rendering/webgpu/webgpu.d.ts",
+            "platform": "web"
+          },
+          {
+            "path": "web/rendering/webgpu/WebGPURenderBuffer.ts",
+            "platform": "web"
+          },
+          {
+            "path": "web/rendering/webgpu/WebGPURenderContext.ts",
+            "platform": "web"
+          },
+          {
+            "path": "web/rendering/webgpu/WebGPURenderer.ts",
+            "platform": "web"
+          },
+          {
+            "path": "web/rendering/webgpu/WebGPUUtils.ts",
+            "platform": "web"
+          },
+          {
+            "path": "web/rendering/webgpu/shaders/WGShaderLib.ts",
+            "platform": "web"
+          },
+          {
+            "path": "web/rendering/webgpu/WebGPUDrawCmdManager.ts",
+            "platform": "web"
+          },
+          {
+            "path": "web/rendering/webgpu/WebGPURenderTarget.ts",
+            "platform": "web"
+          },
+          {
+            "path": "web/rendering/webgpu/WebGPUVertexArrayObject.ts",
+            "platform": "web"
           }
         ],
         "root": "src/egret",
