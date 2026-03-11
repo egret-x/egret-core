@@ -85,7 +85,7 @@ var uTexture: texture_2d<f32>;
 
 @fragment
 fn main(input: FragmentInput) -> @location(0) vec4<f32> {
-    // WebGPU 纹理坐标 Y 需要翻转（WebGL y=0 bottom -> WebGPU y=0 top）
+    // WebGPU 纹理坐标原点在左上，需要翻转 V 坐标
     let uv = vec2<f32>(input.vTextureCoord.x, 1.0 - input.vTextureCoord.y);
     return textureSample(uTexture, uSampler, uv) * input.vColor;
 }`;
@@ -291,7 +291,7 @@ var uTextureAlphaMask: texture_2d<f32>;
 
 @fragment
 fn main(input: FragmentInput) -> @location(0) vec4<f32> {
-     // WebGPU 纹理坐标 Y 需要翻转
+     // WebGPU 纹理坐标原点在左上，需要翻转 V 坐标
      let uv = vec2<f32>(input.vTextureCoord.x, 1.0 - input.vTextureCoord.y);
      let alpha = textureSample(uTextureAlphaMask, uSamplerAlphaMask, uv).r;
      if (alpha < 0.0039) {
@@ -329,7 +329,7 @@ var uTextureAlphaMask: texture_2d<f32>;
 
 @fragment
 fn main(input: FragmentInput) -> @location(0) vec4<f32> {
-     // WebGPU 纹理坐标 Y 需要翻转
+     // WebGPU 纹理坐标原点在左上，需要翻转 V 坐标
      let uv = vec2<f32>(input.vTextureCoord.x, 1.0 - input.vTextureCoord.y);
      let alpha = textureSample(uTextureAlphaMask, uSamplerAlphaMask, uv).r;
      if (alpha < 0.0039) {

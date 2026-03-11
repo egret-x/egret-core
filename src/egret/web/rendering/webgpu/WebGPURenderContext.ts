@@ -338,8 +338,7 @@ var uTexture: texture_2d<f32>;
 
 @fragment
 fn main(input: FragmentInput) -> @location(0) vec4<f32> {
-     // WebGPU 纹理坐标 Y 需要翻转
-     let uv = vec2<f32>(input.vTextureCoord.x, 1.0 - input.vTextureCoord.y);
+     let uv = input.vTextureCoord;
      var texColor = textureSample(uTexture, uSampler, uv);
      if (texColor.a > 0.0) {
          texColor = vec4<f32>(texColor.rgb / texColor.a, texColor.a);
@@ -384,8 +383,7 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
      var color = vec4<f32>(0.0, 0.0, 0.0, 0.0);
      var uv = vec2<f32>(0.0, 0.0);
      blurUv = blurUv / f32(sampleRadius);
-     // WebGPU 纹理坐标 Y 需要翻转
-     let baseY = 1.0 - input.vTextureCoord.y;
+     let baseY = input.vTextureCoord.y;
  
      for (var i = -sampleRadius; i <= sampleRadius; i = i + 1) {
          uv.x = input.vTextureCoord.x + f32(i) * blurUv.x;
@@ -441,8 +439,7 @@ fn random(scale: vec2<f32>, fragCoord: vec2<f32>) -> f32 {
 
 @fragment
 fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
-     // WebGPU 纹理坐标 Y 需要翻转
-     let baseUv = vec2<f32>(input.vTextureCoord.x, 1.0 - input.vTextureCoord.y);
+     let baseUv = input.vTextureCoord;
      
      let px = vec2<f32>(1.0 / gu.uTextureSize.x, 1.0 / gu.uTextureSize.y);
      let linearSamplingTimes = 7.0;
@@ -1371,7 +1368,8 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
                         y = y * m.d + m.ty;
                         width = width * m.a;
                         height = height * m.d;
-                        this.enableScissor(x, -y - height + buffer.height, width, height);
+                        // 移除残留的 WebGL 坐标系翻转，直接使用正确的 top-left y坐标
+                        this.enableScissor(x, y, width, height);
                         this.clear();
                         this.disableScissor();
                     } else {
@@ -1683,15 +1681,26 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
 
             const vertices = this.vao.getVertices();
             if (vertices.byteLength > 0) {
-                this.device.queue.writeBuffer(this.vertexGPUBuffer, 0, vertices.buffer, vertices.byteOffset, vertices.byteLength);
+                // WebGPU 规定 writeBuffer 长度必须是 4 的倍数
+                let vWriteLen = (vertices.byteLength + 3) & ~3;
+                vWriteLen = Math.min(vWriteLen, vertices.buffer.byteLength - vertices.byteOffset);
+                this.device.queue.writeBuffer(this.vertexGPUBuffer, 0, vertices.buffer, vertices.byteOffset, vWriteLen);
             }
 
             if (this.vao.isMesh()) {
                 const meshIndices = this.vao.getMeshIndices();
-                this.device.queue.writeBuffer(this.indexGPUBuffer, 0, meshIndices.buffer, meshIndices.byteOffset, meshIndices.byteLength);
+                if (meshIndices.byteLength > 0) {
+                    let iWriteLen = (meshIndices.byteLength + 3) & ~3;
+                    iWriteLen = Math.min(iWriteLen, meshIndices.buffer.byteLength - meshIndices.byteOffset);
+                    this.device.queue.writeBuffer(this.indexGPUBuffer, 0, meshIndices.buffer, meshIndices.byteOffset, iWriteLen);
+                }
             } else {
                 const indices = this.vao.getIndices();
-                this.device.queue.writeBuffer(this.indexGPUBuffer, 0, indices.buffer, indices.byteOffset, indices.byteLength);
+                if (indices.byteLength > 0) {
+                    let iWriteLen = (indices.byteLength + 3) & ~3;
+                    iWriteLen = Math.min(iWriteLen, indices.buffer.byteLength - indices.byteOffset);
+                    this.device.queue.writeBuffer(this.indexGPUBuffer, 0, indices.buffer, indices.byteOffset, iWriteLen);
+                }
             }
 
              let length = this.drawCmdManager.drawDataLen;
@@ -2010,28 +2019,27 @@ fn main(input: FragmentInput, @builtin(position) fragCoord: vec4<f32>) -> @locat
                             let renderTargetWidth = this.activatedBuffer.rootRenderTarget.width;
                             let renderTargetHeight = this.activatedBuffer.rootRenderTarget.height;
                             
-                            let x = Math.max(0, Math.floor(data.x));
-                            let y = Math.max(0, Math.floor(data.y));
+                            let x = Math.floor(data.x);
+                            let y = Math.floor(data.y);
                             let w = Math.ceil(data.width);
                             let h = Math.ceil(data.height);
                             
-                            // 先验证起始坐标是否在渲染目标范围内
-                            if (x >= renderTargetWidth || y >= renderTargetHeight) {
-                                // 起始坐标已超出渲染目标，不设置scissor
-                                break;
+                            let r = x + w;
+                            let b = y + h;
+
+                            // 与渲染目标做交集
+                            x = Math.max(0, x);
+                            y = Math.max(0, y);
+                            r = Math.min(renderTargetWidth, r);
+                            b = Math.min(renderTargetHeight, b);
+
+                            w = r - x;
+                            h = b - y;
+
+                            if (w <= 0 || h <= 0) {
+                                // 元素完全不在屏幕内，强制设置1x1的裁剪使得元素不被显示出来
+                                x = 0; y = 0; w = 1; h = 1;
                             }
-                            
-                            // 限制右边界和下边界
-                            if (x + w > renderTargetWidth) {
-                                w = renderTargetWidth - x;
-                            }
-                            if (y + h > renderTargetHeight) {
-                                h = renderTargetHeight - y;
-                            }
-                            
-                            // 确保宽度和高度至少为1
-                            w = Math.max(1, w);
-                            h = Math.max(1, h);
                             
                             renderPassEncoder.setScissorRect(x, y, w, h);
                         }
