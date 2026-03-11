@@ -44,6 +44,9 @@ namespace egret.web {
 	export class WGShaderLib {
 
 		// ===== 默认顶点着色器（从uniform读取projectionVector）=====
+        /**
+         * 顶点着色器：从uniform读取projectionVector
+         */
 		public static readonly default_vert: string = `struct Uniforms {
     projectionVector: vec2<f32>,
 };
@@ -72,6 +75,9 @@ fn main(
 }`;
 
 		// ===== 纹理片段着色器 =====
+        /**
+         * 纹理片段着色器
+         */
 		public static readonly texture_frag: string = `struct FragmentInput {
     @location(0) vTextureCoord: vec2<f32>,
     @location(1) vColor: vec4<f32>,
@@ -91,6 +97,9 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
 }`;
 
 		// ===== 纯色片段着色器（矩形/遮罩）=====
+        /**
+         * 纯色片段着色器（用于矩形/遮罩）
+         */
 		public static readonly primitive_frag: string = `struct FragmentInput {
     @location(0) vTextureCoord: vec2<f32>,
     @location(1) vColor: vec4<f32>,
@@ -106,6 +115,10 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
 
 		// ===== blur片段着色器 =====
 		// group(1) binding(0): BlurUniforms { blur: vec2, padding, uTextureSize: vec2, padding }
+        /**
+         * blur片段着色器
+         * group(1): binding(0)=uniform(blur: vec2, padding, uTextureSize: vec2, padding)
+         */
 		public static readonly blur_frag: string = `struct FragmentInput {
     @location(0) vTextureCoord: vec2<f32>,
     @location(1) vColor: vec4<f32>,
@@ -148,6 +161,11 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
 
 		// ===== colorTransform片段着色器 =====
 		// group(1) binding(0): ColorMatrix { matrix: mat4x4, colorAdd: vec4 }
+        /**
+         * colorTransform片段着色器
+         * group(0): binding(0)=uniform(projectionVector), binding(1)=sampler, binding(2)=texture
+         * group(1): binding(0)=uniform(ColorMatrix: mat4x4+vec4)
+         */
 		public static readonly colorTransform_frag: string = `struct FragmentInput {
     @location(0) vTextureCoord: vec2<f32>,
     @location(1) vColor: vec4<f32>,
@@ -179,6 +197,10 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
 
 		// ===== glow片段着色器 =====
 		// group(1) binding(0): GlowUniforms
+        /**
+         * glow片段着色器
+         * group(1): binding(0)=uniform(GlowUniforms)
+         */
 		public static readonly glow_frag: string = `struct FragmentInput {
     @location(0) vTextureCoord: vec2<f32>,
     @location(1) vColor: vec4<f32>,
