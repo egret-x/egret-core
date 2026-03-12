@@ -1708,18 +1708,19 @@ namespace egret.web {
                         let buffer = this.activatedBuffer;
                         buffer.stencilHandleCount--;
 
-                        if (buffer.stencilHandleCount == 0) {
-                             // 所有mask已弹出：重启render pass，不附加depth-stencil
-                             let indexCount = data.count * 3;
-                             offset += indexCount;
+                         if (buffer.stencilHandleCount == 0) {
+                              // 所有mask已弹出：重启render pass，清除stencil缓冲
+                              let indexCount = data.count * 3;
+                              offset += indexCount;
 
-                             renderPassEncoder.end();
-                             this.device.queue.submit([commandEncoder.finish()]);
-                             commandEncoder = this.device.createCommandEncoder();
-                             renderPassEncoder = this.beginRenderPass(commandEncoder, currentTargetView, 'load');
-                             // beginRenderPass总是附加depthStencil
-                             currentRenderPassHasDepthStencil = true;
-                         } else {
+                              renderPassEncoder.end();
+                              this.device.queue.submit([commandEncoder.finish()]);
+                              commandEncoder = this.device.createCommandEncoder();
+                              // 清除stencil缓冲，确保后续的stencil测试使用正确的初始状态
+                              renderPassEncoder = this.beginRenderPass(commandEncoder, currentTargetView, 'load', true);
+                              // beginRenderPass总是附加depthStencil
+                              currentRenderPassHasDepthStencil = true;
+                          } else {
                             let level = buffer.stencilHandleCount;
 
                             // 画mask几何：stencil DECR，不写颜色
