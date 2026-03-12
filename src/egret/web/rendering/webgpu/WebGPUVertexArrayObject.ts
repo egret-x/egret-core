@@ -222,66 +222,75 @@ namespace egret.web {
                 let height = textureSourceHeight;
                 let w = sourceWidth;
                 let h = sourceHeight;
+                
                 sourceX = sourceX / width;
                 sourceY = sourceY / height;
+                
                 let vertices = this.vertices;
                 const verticesUint32View = this._verticesUint32View;
                 let index = this.vertexIndex * this.vertSize;
 
+                let normalizedSourceWidth = sourceWidth / width;
+                let normalizedSourceHeight = sourceHeight / height;
+                
+                // 着色器中已经做了 1.0 - v 翻转
+                // 为了正确显示，顶点中的V坐标也要做相同的翻转
+                // 这样: 顶点V翻转 -> 着色器V翻转 -> 双重翻转 = 取消，回到原始
+                let vStart = 1.0 - sourceY - normalizedSourceHeight;
+                let vEnd = 1.0 - sourceY;
+
                 if (rotated) {
-                    let temp = sourceWidth;
-                    sourceWidth = sourceHeight / width;
-                    sourceHeight = temp / height;
+                    let temp = normalizedSourceWidth;
+                    normalizedSourceWidth = normalizedSourceHeight;
+                    normalizedSourceHeight = temp;
                     // 顶点0
                     vertices[index++] = tx;
                     vertices[index++] = ty;
-                    vertices[index++] = sourceWidth + sourceX;
-                    vertices[index++] = sourceY;
+                    vertices[index++] = normalizedSourceWidth + sourceX;
+                    vertices[index++] = vStart;
                     verticesUint32View[index++] = alpha;
                     // 顶点1
                     vertices[index++] = a * w + tx;
                     vertices[index++] = b * w + ty;
-                    vertices[index++] = sourceWidth + sourceX;
-                    vertices[index++] = sourceHeight + sourceY;
+                    vertices[index++] = normalizedSourceWidth + sourceX;
+                    vertices[index++] = vEnd;
                     verticesUint32View[index++] = alpha;
                     // 顶点2
                     vertices[index++] = a * w + c * h + tx;
                     vertices[index++] = d * h + b * w + ty;
                     vertices[index++] = sourceX;
-                    vertices[index++] = sourceHeight + sourceY;
+                    vertices[index++] = vEnd;
                     verticesUint32View[index++] = alpha;
                     // 顶点3
                     vertices[index++] = c * h + tx;
                     vertices[index++] = d * h + ty;
                     vertices[index++] = sourceX;
-                    vertices[index++] = sourceY;
+                    vertices[index++] = vStart;
                     verticesUint32View[index++] = alpha;
                 } else {
-                    sourceWidth = sourceWidth / width;
-                    sourceHeight = sourceHeight / height;
                     // 顶点0
                     vertices[index++] = tx;
                     vertices[index++] = ty;
                     vertices[index++] = sourceX;
-                    vertices[index++] = sourceY;
+                    vertices[index++] = vStart;
                     verticesUint32View[index++] = alpha;
                     // 顶点1
                     vertices[index++] = a * w + tx;
                     vertices[index++] = b * w + ty;
-                    vertices[index++] = sourceWidth + sourceX;
-                    vertices[index++] = sourceY;
+                    vertices[index++] = normalizedSourceWidth + sourceX;
+                    vertices[index++] = vStart;
                     verticesUint32View[index++] = alpha;
                     // 顶点2
                     vertices[index++] = a * w + c * h + tx;
                     vertices[index++] = d * h + b * w + ty;
-                    vertices[index++] = sourceWidth + sourceX;
-                    vertices[index++] = sourceHeight + sourceY;
+                    vertices[index++] = normalizedSourceWidth + sourceX;
+                    vertices[index++] = vEnd;
                     verticesUint32View[index++] = alpha;
                     // 顶点3
                     vertices[index++] = c * h + tx;
                     vertices[index++] = d * h + ty;
                     vertices[index++] = sourceX;
-                    vertices[index++] = sourceHeight + sourceY;
+                    vertices[index++] = vEnd;
                     verticesUint32View[index++] = alpha;
                 }
                 // 缓存索引数组
