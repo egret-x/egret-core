@@ -1,90 +1,5 @@
 declare namespace egret {
     /**
-     * The URLLoaderDataFormat class provides values that specify how downloaded data is received.
-     * @see http://edn.egret.com/cn/docs/page/600 Read different data format
-     * @version Egret 2.4
-     * @platform Web,Native
-     * @includeExample extension/game/net/URLLoaderDataFormat.ts
-     * @language en_US
-     */
-    /**
-     * URLLoaderDataFormat 类提供了一些用于指定如何接收已下载数据的值。
-     * @see http://edn.egret.com/cn/docs/page/600 读取不同数据格式
-     * @version Egret 2.4
-     * @platform Web,Native
-     * @includeExample extension/game/net/URLLoaderDataFormat.ts
-     * @language zh_CN
-     */
-    class URLLoaderDataFormat {
-        /**
-         * Specify that downloaded data is received as raw binary data.
-         * @version Egret 2.4
-         * @platform Web
-         * @language en_US
-         */
-        /**
-         * 指定以原始二进制数据形式接收下载的数据。
-         * @version Egret 2.4
-         * @platform Web
-         * @language zh_CN
-         */
-        static BINARY: string;
-        /**
-         * Specify that downloaded data is received as text.
-         * @version Egret 2.4
-         * @platform Web,Native
-         * @language en_US
-         */
-        /**
-         * 指定以文本形式接收已下载的数据。
-         * @version Egret 2.4
-         * @platform Web,Native
-         * @language zh_CN
-         */
-        static TEXT: string;
-        /**
-         * Specify that downloaded data is received as URL-encoded variables.
-         * @version Egret 2.4
-         * @platform Web,Native
-         * @language en_US
-         */
-        /**
-         * 指定以 URL 编码变量形式接收下载的数据。
-         * @version Egret 2.4
-         * @platform Web,Native
-         * @language zh_CN
-         */
-        static VARIABLES: string;
-        /**
-         * Specify that downloaded data is received as bitmap texture.
-         * @version Egret 2.4
-         * @platform Web,Native
-         * @language en_US
-         */
-        /**
-         * 指定以位图纹理形式接收已下载的数据。
-         * @version Egret 2.4
-         * @platform Web,Native
-         * @language zh_CN
-         */
-        static TEXTURE: string;
-        /**
-         * Specify that downloaded data is received as sound.
-         * @version Egret 2.4
-         * @platform Web,Native
-         * @language en_US
-         */
-        /**
-         * 指定以声音形式接收已下载的数据。
-         * @version Egret 2.4
-         * @platform Web,Native
-         * @language zh_CN
-         */
-        static SOUND: string;
-    }
-}
-declare namespace egret {
-    /**
      * @version Egret 2.4
      * @platform Web,Native
      * @private
@@ -119,7 +34,7 @@ declare namespace egret {
          * @platform Web,Native
          * @language zh_CN
          */
-        readonly name: string;
+        get name(): string;
         /**
          * Frame serial number of the label
          * @version Egret 2.4
@@ -132,7 +47,7 @@ declare namespace egret {
          * @platform Web,Native
          * @language zh_CN
          */
-        readonly frame: number;
+        get frame(): number;
         /**
          * Frame serial number, the end of the label
          * @version Egret 2.4
@@ -145,7 +60,7 @@ declare namespace egret {
          * @platform Web,Native
          * @language zh_CN
          */
-        readonly end: number;
+        get end(): number;
         /**
          * Duplicate the current frame label object
          * @version Egret 2.4
@@ -159,6 +74,326 @@ declare namespace egret {
          * @language zh_CN
          */
         clone(): FrameLabel;
+    }
+}
+declare namespace egret {
+    /**
+    * @version Egret 2.4
+    * @platform Web,Native
+    * @includeExample extension/game/display/MovieClip.ts
+    * @language en_US
+    */
+    /**
+     * 影片剪辑，可以通过影片剪辑播放序列帧动画。MovieClip 类从以下类继承而来：DisplayObject 和 EventDispatcher。不同于 DisplayObject 对象，MovieClip 对象拥有一个时间轴。
+     * @extends egret.DisplayObject
+     * @event egret.Event.COMPLETE 动画播放完成。
+     * @event egret.Event.LOOP_COMPLETE 动画循环播放完成。循环最后一次只派发 COMPLETE 事件，不派发 LOOP_COMPLETE 事件。
+     * @see http://edn.egret.com/cn/docs/page/596 MovieClip序列帧动画
+     * @version Egret 2.4
+     * @platform Web,Native
+     * @includeExample extension/game/display/MovieClip.ts
+     * @language zh_CN
+     */
+    class MovieClip extends DisplayObject {
+        $texture: Texture;
+        private offsetPoint;
+        $movieClipData: MovieClipData;
+        /**
+         * @private
+         */
+        private frames;
+        /**
+         * @private
+         */
+        $totalFrames: number;
+        /**
+         * @version Egret 2.4
+         * @platform Web,Native
+         * @private
+         */
+        frameLabels: any[];
+        /**
+         * @private
+         */
+        $frameLabelStart: number;
+        /**
+         * @private
+         */
+        $frameLabelEnd: number;
+        /**
+         * @version Egret 2.4
+         * @platform Web,Native
+         * @private
+         */
+        frameEvents: any[];
+        /**
+         * @private
+         */
+        private frameIntervalTime;
+        /**
+         * @private
+         */
+        $eventPool: string[];
+        $isPlaying: boolean;
+        /**
+         * @private
+         */
+        private isStopped;
+        /**
+         * @private
+         */
+        private playTimes;
+        /**
+         * @private
+         */
+        $currentFrameNum: number;
+        /**
+         * @private
+         */
+        $nextFrameNum: number;
+        /**
+         * @private
+         */
+        private displayedKeyFrameNum;
+        /**
+         * @private
+         */
+        private passedTime;
+        /**
+         * @private
+         */
+        private $frameRate;
+        /**
+         * 创建新的 MovieClip 实例。创建 MovieClip 之后，调用舞台上的显示对象容器的addElement方法。
+         * @param movieClipData {movieClipData} 被引用的 movieClipData 对象
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        constructor(movieClipData?: MovieClipData);
+        protected createNativeDisplayObject(): void;
+        /**
+         * @private
+         */
+        $smoothing: boolean;
+        /**
+         * Whether or not is smoothed when scaled.
+         * @version Egret 3.0
+         * @platform Web
+         * @language en_US
+         */
+        /**
+         * 控制在缩放时是否进行平滑处理。
+         * @version Egret 3.0
+         * @platform Web
+         * @language zh_CN
+         */
+        get smoothing(): boolean;
+        set smoothing(value: boolean);
+        /**
+         * @private
+         *
+         */
+        $init(): void;
+        /**
+         * @private
+         *
+         */
+        $reset(): void;
+        /**
+         * @private
+         *
+         */
+        private _initFrame;
+        /**
+         * @private
+         */
+        $updateRenderNode(): void;
+        /**
+         * @private
+         */
+        $measureContentBounds(bounds: Rectangle): void;
+        /**
+         * @private
+         *
+         * @param stage
+         * @param nestLevel
+         */
+        $onAddToStage(stage: Stage, nestLevel: number): void;
+        /**
+         * @private
+         *
+         */
+        $onRemoveFromStage(): void;
+        /**
+         * @private
+         * 返回帧标签为指定字符串的FrameLabel对象
+         * @param labelName {string} 帧标签名
+         * @param ignoreCase {boolean} 是否忽略大小写，可选参数，默认false
+         * @returns {egret.FrameLabel} FrameLabel对象
+         */
+        private getFrameLabelByName;
+        /**
+         * @private
+         * 根据帧标签，设置开始和结束的帧数
+         * @param labelName {string} 帧标签名
+         */
+        private getFrameStartEnd;
+        /**
+         * @private
+         * 返回指定序号的帧的FrameLabel对象
+         * @param frame {number} 帧序号
+         * @returns {egret.FrameLabel} FrameLabel对象
+         */
+        private getFrameLabelByFrame;
+        /**
+         * @private
+         * 返回指定序号的帧对应的FrameLabel对象，如果当前帧没有标签，则返回前面最近的有标签的帧的FrameLabel对象
+         * @method egret.MovieClip#getFrameLabelForFrame
+         * @param frame {number} 帧序号
+         * @returns {egret.FrameLabel} FrameLabel对象
+         */
+        private getFrameLabelForFrame;
+        /**
+         * 继续播放当前动画
+         * @param playTimes {number} 播放次数。 参数为整数，可选参数，>=1：设定播放次数，<0：循环播放，默认值 0：不改变播放次数(MovieClip初始播放次数设置为1)，
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        play(playTimes?: number): void;
+        /**
+         * 暂停播放动画
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        stop(): void;
+        /**
+         * 将播放头移到前一帧并停止
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        prevFrame(): void;
+        /**
+         * 跳到后一帧并停止
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        nextFrame(): void;
+        /**
+         * 将播放头移到指定帧并播放
+         * @param frame {any} 指定帧的帧号或帧标签
+         * @param playTimes {number} 播放次数。 参数为整数，可选参数，>=1：设定播放次数，<0：循环播放，默认值 0：不改变播放次数，
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        gotoAndPlay(frame: string | number, playTimes?: number): void;
+        /**
+         * 将播放头移到指定帧并停止
+         * @param frame {any} 指定帧的帧号或帧标签
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        gotoAndStop(frame: string | number): void;
+        /**
+         * @private
+         *
+         * @param frame
+         */
+        private gotoFrame;
+        /**
+         * @private
+         */
+        private lastTime;
+        /**
+         * @private
+         *
+         * @param advancedTime
+         * @returns
+         */
+        private advanceTime;
+        /**
+         * @private
+         *
+         */
+        private advanceFrame;
+        /**
+         * @private
+         *
+         */
+        private constructFrame;
+        /**
+         * @private
+         *
+         */
+        $renderFrame(): void;
+        /**
+         * @private
+         *
+         */
+        private handlePendingEvent;
+        /**
+         * MovieClip 实例中帧的总数
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        get totalFrames(): number;
+        /**
+         * MovieClip 实例当前播放的帧的序号
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        get currentFrame(): number;
+        /**
+         * MovieClip 实例当前播放的帧的标签。如果当前帧没有标签，则 currentFrameLabel返回null。
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        get currentFrameLabel(): string;
+        /**
+         * 当前播放的帧对应的标签，如果当前帧没有标签，则currentLabel返回包含标签的先前帧的标签。如果当前帧和先前帧都不包含标签，currentLabel返回null。
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        get currentLabel(): string;
+        /**
+         * MovieClip 实例的帧频
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        get frameRate(): number;
+        set frameRate(value: number);
+        /**
+         * MovieClip 实例当前是否正在播放
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        get isPlaying(): boolean;
+        /**
+         * MovieClip数据源
+         */
+        set movieClipData(value: MovieClipData);
+        /**
+         * @version Egret 2.4
+         * @platform Web,Native
+         */
+        get movieClipData(): MovieClipData;
+        /**
+         * @private
+         *
+         * @param value
+         */
+        private setMovieClipData;
+        /**
+         * @private
+         *
+         * @param value
+         */
+        private setPlayTimes;
+        /**
+         * @private
+         *
+         * @param value
+         */
+        private setIsStopped;
     }
 }
 declare namespace egret {
@@ -253,7 +488,7 @@ declare namespace egret {
          * @param resName
          * @returns
          */
-        private getTextureByResName(resName);
+        private getTextureByResName;
         /**
          * @private
          *
@@ -277,33 +512,34 @@ declare namespace egret {
          *
          * @param framesData
          */
-        private fillFramesData(framesData);
+        private fillFramesData;
         /**
          * @private
          *
          * @param frameLabelsData
          */
-        private fillFrameLabelsData(frameLabelsData);
+        private fillFrameLabelsData;
         /**
          * @private
          *
          * @param frameEventsData
          */
-        private fillFrameEventsData(frameEventsData);
+        private fillFrameEventsData;
+        /**
+         * MovieClip数据源
+         */
+        set mcData(value: MovieClipData);
         /**
          * @version Egret 2.4
          * @platform Web,Native
          */
-        /**
-         * MovieClip数据源
-         */
-        mcData: MovieClipData;
+        get mcData(): MovieClipData;
         /**
          * @private
          *
          * @param value
          */
-        private setMCData(value);
+        private setMCData;
     }
 }
 declare namespace egret {
@@ -361,7 +597,7 @@ declare namespace egret {
          * @param cache
          * @returns
          */
-        private findFromCache(movieClipName, cache);
+        private findFromCache;
         /**
          * @private
          *
@@ -369,29 +605,30 @@ declare namespace egret {
          * @param movieClip
          * @param cache
          */
-        private fillData(movieClipName, movieClip, cache);
+        private fillData;
         /**
          * MovieClip数据集
          * @version Egret 2.4
          * @platform Web,Native
          */
-        mcDataSet: any;
+        get mcDataSet(): any;
+        set mcDataSet(value: any);
         /**
          * MovieClip需要使用的纹理图
          */
-        texture: Texture;
+        set texture(value: Texture);
         /**
          * 由纹理图生成的精灵表
          * @version Egret 2.4
          * @platform Web,Native
          */
-        readonly spriteSheet: SpriteSheet;
+        get spriteSheet(): SpriteSheet;
         /**
          * @private
          *
          * @param value
          */
-        private setTexture(value);
+        private setTexture;
     }
 }
 declare namespace egret {
@@ -639,7 +876,7 @@ declare namespace egret {
          * @param delta
          * @param paused
          */
-        private static tick(timeStamp, paused?);
+        private static tick;
         private static _lastTime;
         /**
          * @private
@@ -647,7 +884,7 @@ declare namespace egret {
          * @param tween
          * @param value
          */
-        private static _register(tween, value);
+        private static _register;
         /**
          * 创建一个 egret.ScrollTween 对象
          * @private
@@ -662,7 +899,7 @@ declare namespace egret {
          * @param props
          * @param pluginData
          */
-        private initialize(target, props, pluginData);
+        private initialize;
         /**
          * @private
          *
@@ -670,7 +907,7 @@ declare namespace egret {
          * @param actionsMode
          * @returns
          */
-        private setPosition(value, actionsMode?);
+        private setPosition;
         /**
          * @private
          *
@@ -678,14 +915,14 @@ declare namespace egret {
          * @param endPos
          * @param includeStart
          */
-        private _runActions(startPos, endPos, includeStart?);
+        private _runActions;
         /**
          * @private
          *
          * @param step
          * @param ratio
          */
-        private _updateTargetProps(step, ratio);
+        private _updateTargetProps;
         /**
          * Whether setting is paused
          * @param value {boolean} Whether to pause
@@ -709,28 +946,28 @@ declare namespace egret {
          * @param props
          * @returns
          */
-        private _cloneProps(props);
+        private _cloneProps;
         /**
          * @private
          *
          * @param o
          * @returns
          */
-        private _addStep(o);
+        private _addStep;
         /**
          * @private
          *
          * @param o
          * @returns
          */
-        private _appendQueueProps(o);
+        private _appendQueueProps;
         /**
          * @private
          *
          * @param o
          * @returns
          */
-        private _addAction(o);
+        private _addAction;
         /**
          * Modify the property of the specified display object to a specified value
          * @param props {Object} Property set of an object
@@ -843,7 +1080,8 @@ declare namespace egret {
          * @version Egret 2.4
          * @language zh_CN
          */
-        bounces: boolean;
+        get bounces(): boolean;
+        set bounces(value: boolean);
         /**
          * Create a egret.ScrollView objects
          * @param content {egret.DisplayObject} You need to scroll object
@@ -903,7 +1141,8 @@ declare namespace egret {
          * @platform Web,Native
          * @language zh_CN
          */
-        verticalScrollPolicy: string;
+        get verticalScrollPolicy(): string;
+        set verticalScrollPolicy(value: string);
         /**
          * The horizontal scroll bar display policy, on / off / auto.
          * @version Egret 2.4
@@ -916,7 +1155,8 @@ declare namespace egret {
          * @platform Web,Native
          * @language zh_CN
          */
-        horizontalScrollPolicy: string;
+        get horizontalScrollPolicy(): string;
+        set horizontalScrollPolicy(value: string);
         /**
          * Gets or sets the horizontal scroll position
          * @returns {number}
@@ -931,7 +1171,8 @@ declare namespace egret {
          * @platform Web,Native
          * @language zh_CN
          */
-        scrollLeft: number;
+        get scrollLeft(): number;
+        set scrollLeft(value: number);
         /**
          * Gets or sets the vertical scroll position
          * @returns {number}
@@ -946,7 +1187,8 @@ declare namespace egret {
          * @platform Web,Native
          * @language zh_CN
          */
-        scrollTop: number;
+        get scrollTop(): number;
+        set scrollTop(value: number);
         /**
          * Set scroll position
          * @param top {number} The vertical scroll position
@@ -972,7 +1214,7 @@ declare namespace egret {
          * @param top
          * @param left
          */
-        private _validatePosition(top?, left?);
+        private _validatePosition;
         /**
          * @private
          * @inheritDoc
@@ -1002,7 +1244,7 @@ declare namespace egret {
          * @param viewLength
          * @returns
          */
-        private __checkScrollPolicy(policy, contentLength, viewLength);
+        private __checkScrollPolicy;
         /**
          * @private
          *
@@ -1042,19 +1284,19 @@ declare namespace egret {
          * @param event
          * @returns
          */
-        private _onTouchEndCapture(event);
+        private _onTouchEndCapture;
         /**
          * @private
          *
          */
-        private _onTouchBeginTimer();
+        private _onTouchBeginTimer;
         /**
          * @private
          *
          * @param event
          * @returns
          */
-        private dispatchPropagationEvent(event);
+        private dispatchPropagationEvent;
         /**
          * @private
          *
@@ -1082,21 +1324,21 @@ declare namespace egret {
          * @param e
          * @returns
          */
-        private _logTouchEvent(e);
+        private _logTouchEvent;
         /**
          * @private
          *
          * @param e
          * @returns
          */
-        private _getPointChange(e);
+        private _getPointChange;
         /**
          * @private
          *
          * @param e
          * @returns
          */
-        private _calcVelocitys(e);
+        private _calcVelocitys;
         /**
          * @private
          *
@@ -1147,13 +1389,13 @@ declare namespace egret {
          * @private
          *
          */
-        private _moveAfterTouchEnd();
+        private _moveAfterTouchEnd;
         /**
          * @private
          *
          * @param tw
          */
-        private onTweenFinished(tw);
+        private onTweenFinished;
         /**
          * @private
          *
@@ -1212,20 +1454,20 @@ declare namespace egret {
          * @param maxPos
          * @returns
          */
-        private getAnimationDatas(pixelsPerMS, curPos, maxPos);
+        private getAnimationDatas;
         /**
          * @private
          *
          * @param event
          * @returns
          */
-        private cloneTouchEvent(event);
+        private cloneTouchEvent;
         /**
          * @private
          *
          * @returns
          */
-        private throwNotSupportedError();
+        private throwNotSupportedError;
         /**
          * @deprecated
          * @inheritDoc
@@ -1467,7 +1709,7 @@ declare namespace egret {
          * @language zh_CN
          */
         load(request: URLRequest): void;
-        private getResponseType(dataFormat);
+        private getResponseType;
         /**
          * @private
          */
@@ -1477,11 +1719,11 @@ declare namespace egret {
          *
          * @param loader
          */
-        private loadSound(loader);
-        private onSoundoadComplete(event);
-        private onSoundLoaderPostProgress(event);
-        private onSoundLoaderError(event);
-        private removeSoundLoaderListeners();
+        private loadSound;
+        private onSoundoadComplete;
+        private onSoundLoaderPostProgress;
+        private onSoundLoaderError;
+        private removeSoundLoaderListeners;
         /**
          * @private
          */
@@ -1495,11 +1737,11 @@ declare namespace egret {
          *
          * @param loader
          */
-        private loadTexture(loader);
-        private onImageLoadComplete(event);
-        private onImageLoaderPostProgress(event);
-        private onImageLoaderError(event);
-        private removeImageLoaderListeners();
+        private loadTexture;
+        private onImageLoadComplete;
+        private onImageLoaderPostProgress;
+        private onImageLoaderError;
+        private removeImageLoaderListeners;
         /**
          * @private
          */
@@ -1513,319 +1755,87 @@ declare namespace egret {
 }
 declare namespace egret {
     /**
-    * @version Egret 2.4
-    * @platform Web,Native
-    * @includeExample extension/game/display/MovieClip.ts
-    * @language en_US
-    */
-    /**
-     * 影片剪辑，可以通过影片剪辑播放序列帧动画。MovieClip 类从以下类继承而来：DisplayObject 和 EventDispatcher。不同于 DisplayObject 对象，MovieClip 对象拥有一个时间轴。
-     * @extends egret.DisplayObject
-     * @event egret.Event.COMPLETE 动画播放完成。
-     * @event egret.Event.LOOP_COMPLETE 动画循环播放完成。循环最后一次只派发 COMPLETE 事件，不派发 LOOP_COMPLETE 事件。
-     * @see http://edn.egret.com/cn/docs/page/596 MovieClip序列帧动画
+     * The URLLoaderDataFormat class provides values that specify how downloaded data is received.
+     * @see http://edn.egret.com/cn/docs/page/600 Read different data format
      * @version Egret 2.4
      * @platform Web,Native
-     * @includeExample extension/game/display/MovieClip.ts
+     * @includeExample extension/game/net/URLLoaderDataFormat.ts
+     * @language en_US
+     */
+    /**
+     * URLLoaderDataFormat 类提供了一些用于指定如何接收已下载数据的值。
+     * @see http://edn.egret.com/cn/docs/page/600 读取不同数据格式
+     * @version Egret 2.4
+     * @platform Web,Native
+     * @includeExample extension/game/net/URLLoaderDataFormat.ts
      * @language zh_CN
      */
-    class MovieClip extends DisplayObject {
-        $texture: Texture;
-        private offsetPoint;
-        $movieClipData: MovieClipData;
+    class URLLoaderDataFormat {
         /**
-         * @private
-         */
-        private frames;
-        /**
-         * @private
-         */
-        $totalFrames: number;
-        /**
+         * Specify that downloaded data is received as raw binary data.
          * @version Egret 2.4
-         * @platform Web,Native
-         * @private
-         */
-        frameLabels: any[];
-        /**
-         * @private
-         */
-        $frameLabelStart: number;
-        /**
-         * @private
-         */
-        $frameLabelEnd: number;
-        /**
-         * @version Egret 2.4
-         * @platform Web,Native
-         * @private
-         */
-        frameEvents: any[];
-        /**
-         * @private
-         */
-        private frameIntervalTime;
-        /**
-         * @private
-         */
-        $eventPool: string[];
-        $isPlaying: boolean;
-        /**
-         * @private
-         */
-        private isStopped;
-        /**
-         * @private
-         */
-        private playTimes;
-        /**
-         * @private
-         */
-        $currentFrameNum: number;
-        /**
-         * @private
-         */
-        $nextFrameNum: number;
-        /**
-         * @private
-         */
-        private displayedKeyFrameNum;
-        /**
-         * @private
-         */
-        private passedTime;
-        /**
-         * @private
-         */
-        private $frameRate;
-        /**
-         * 创建新的 MovieClip 实例。创建 MovieClip 之后，调用舞台上的显示对象容器的addElement方法。
-         * @param movieClipData {movieClipData} 被引用的 movieClipData 对象
-         * @version Egret 2.4
-         * @platform Web,Native
-         */
-        constructor(movieClipData?: MovieClipData);
-        protected createNativeDisplayObject(): void;
-        /**
-         * @private
-         */
-        $smoothing: boolean;
-        /**
-         * Whether or not is smoothed when scaled.
-         * @version Egret 3.0
          * @platform Web
          * @language en_US
          */
         /**
-         * 控制在缩放时是否进行平滑处理。
-         * @version Egret 3.0
+         * 指定以原始二进制数据形式接收下载的数据。
+         * @version Egret 2.4
          * @platform Web
          * @language zh_CN
          */
-        smoothing: boolean;
+        static BINARY: string;
         /**
-         * @private
-         *
-         */
-        $init(): void;
-        /**
-         * @private
-         *
-         */
-        $reset(): void;
-        /**
-         * @private
-         *
-         */
-        private _initFrame();
-        /**
-         * @private
-         */
-        $updateRenderNode(): void;
-        /**
-         * @private
-         */
-        $measureContentBounds(bounds: Rectangle): void;
-        /**
-         * @private
-         *
-         * @param stage
-         * @param nestLevel
-         */
-        $onAddToStage(stage: Stage, nestLevel: number): void;
-        /**
-         * @private
-         *
-         */
-        $onRemoveFromStage(): void;
-        /**
-         * @private
-         * 返回帧标签为指定字符串的FrameLabel对象
-         * @param labelName {string} 帧标签名
-         * @param ignoreCase {boolean} 是否忽略大小写，可选参数，默认false
-         * @returns {egret.FrameLabel} FrameLabel对象
-         */
-        private getFrameLabelByName(labelName, ignoreCase?);
-        /**
-         * @private
-         * 根据帧标签，设置开始和结束的帧数
-         * @param labelName {string} 帧标签名
-         */
-        private getFrameStartEnd(labelName);
-        /**
-         * @private
-         * 返回指定序号的帧的FrameLabel对象
-         * @param frame {number} 帧序号
-         * @returns {egret.FrameLabel} FrameLabel对象
-         */
-        private getFrameLabelByFrame(frame);
-        /**
-         * @private
-         * 返回指定序号的帧对应的FrameLabel对象，如果当前帧没有标签，则返回前面最近的有标签的帧的FrameLabel对象
-         * @method egret.MovieClip#getFrameLabelForFrame
-         * @param frame {number} 帧序号
-         * @returns {egret.FrameLabel} FrameLabel对象
-         */
-        private getFrameLabelForFrame(frame);
-        /**
-         * 继续播放当前动画
-         * @param playTimes {number} 播放次数。 参数为整数，可选参数，>=1：设定播放次数，<0：循环播放，默认值 0：不改变播放次数(MovieClip初始播放次数设置为1)，
+         * Specify that downloaded data is received as text.
          * @version Egret 2.4
          * @platform Web,Native
+         * @language en_US
          */
-        play(playTimes?: number): void;
         /**
-         * 暂停播放动画
+         * 指定以文本形式接收已下载的数据。
          * @version Egret 2.4
          * @platform Web,Native
+         * @language zh_CN
          */
-        stop(): void;
+        static TEXT: string;
         /**
-         * 将播放头移到前一帧并停止
+         * Specify that downloaded data is received as URL-encoded variables.
          * @version Egret 2.4
          * @platform Web,Native
+         * @language en_US
          */
-        prevFrame(): void;
         /**
-         * 跳到后一帧并停止
+         * 指定以 URL 编码变量形式接收下载的数据。
          * @version Egret 2.4
          * @platform Web,Native
+         * @language zh_CN
          */
-        nextFrame(): void;
+        static VARIABLES: string;
         /**
-         * 将播放头移到指定帧并播放
-         * @param frame {any} 指定帧的帧号或帧标签
-         * @param playTimes {number} 播放次数。 参数为整数，可选参数，>=1：设定播放次数，<0：循环播放，默认值 0：不改变播放次数，
+         * Specify that downloaded data is received as bitmap texture.
          * @version Egret 2.4
          * @platform Web,Native
+         * @language en_US
          */
-        gotoAndPlay(frame: string | number, playTimes?: number): void;
         /**
-         * 将播放头移到指定帧并停止
-         * @param frame {any} 指定帧的帧号或帧标签
+         * 指定以位图纹理形式接收已下载的数据。
          * @version Egret 2.4
          * @platform Web,Native
+         * @language zh_CN
          */
-        gotoAndStop(frame: string | number): void;
+        static TEXTURE: string;
         /**
-         * @private
-         *
-         * @param frame
-         */
-        private gotoFrame(frame);
-        /**
-         * @private
-         */
-        private lastTime;
-        /**
-         * @private
-         *
-         * @param advancedTime
-         * @returns
-         */
-        private advanceTime(timeStamp);
-        /**
-         * @private
-         *
-         */
-        private advanceFrame();
-        /**
-         * @private
-         *
-         */
-        private constructFrame();
-        /**
-         * @private
-         *
-         */
-        $renderFrame(): void;
-        /**
-         * @private
-         *
-         */
-        private handlePendingEvent();
-        /**
-         * MovieClip 实例中帧的总数
+         * Specify that downloaded data is received as sound.
          * @version Egret 2.4
          * @platform Web,Native
+         * @language en_US
          */
-        readonly totalFrames: number;
         /**
-         * MovieClip 实例当前播放的帧的序号
+         * 指定以声音形式接收已下载的数据。
          * @version Egret 2.4
          * @platform Web,Native
+         * @language zh_CN
          */
-        readonly currentFrame: number;
-        /**
-         * MovieClip 实例当前播放的帧的标签。如果当前帧没有标签，则 currentFrameLabel返回null。
-         * @version Egret 2.4
-         * @platform Web,Native
-         */
-        readonly currentFrameLabel: string;
-        /**
-         * 当前播放的帧对应的标签，如果当前帧没有标签，则currentLabel返回包含标签的先前帧的标签。如果当前帧和先前帧都不包含标签，currentLabel返回null。
-         * @version Egret 2.4
-         * @platform Web,Native
-         */
-        readonly currentLabel: string;
-        /**
-         * MovieClip 实例的帧频
-         * @version Egret 2.4
-         * @platform Web,Native
-         */
-        frameRate: number;
-        /**
-         * MovieClip 实例当前是否正在播放
-         * @version Egret 2.4
-         * @platform Web,Native
-         */
-        readonly isPlaying: boolean;
-        /**
-         * @version Egret 2.4
-         * @platform Web,Native
-         */
-        /**
-         * MovieClip数据源
-         */
-        movieClipData: MovieClipData;
-        /**
-         * @private
-         *
-         * @param value
-         */
-        private setMovieClipData(value);
-        /**
-         * @private
-         *
-         * @param value
-         */
-        private setPlayTimes(value);
-        /**
-         * @private
-         *
-         * @param value
-         */
-        private setIsStopped(value);
+        static SOUND: string;
     }
 }
 declare namespace egret {
@@ -2124,14 +2134,14 @@ declare namespace egret {
          * @param key
          * @param value
          */
-        private encodeValue(key, value);
+        private encodeValue;
         /**
          * @private
          *
          * @param key
          * @param value
          */
-        private encodeArray(key, value);
+        private encodeArray;
     }
 }
 declare namespace egret {
@@ -2159,7 +2169,7 @@ declare namespace egret {
         private _callIndex;
         private _callList;
         private _lastTime;
-        private update(timeStamp);
+        private update;
         private callBackList;
         /**
          * 注册帧回调事件，同一函数的重复监听会被忽略。推荐使用 egret.startTick 替代此方法。
@@ -2260,7 +2270,7 @@ declare namespace egret {
          * @version Egret 2.4
          * @platform Web,Native
          */
-        readonly stage: Stage;
+        get stage(): Stage;
         /**
          * @version Egret 2.4
          * @platform Web,Native
@@ -2292,7 +2302,7 @@ declare namespace egret {
          * @version Egret 2.4
          * @platform Web,Native
          */
-        static readonly instance: egret.MainContext;
+        static get instance(): egret.MainContext;
     }
 }
 declare namespace egret {
@@ -2368,7 +2378,7 @@ declare namespace egret {
          * @platform Web,Native
          * @language zh_CN
          */
-        readonly length: number;
+        get length(): number;
         /**
          * Cache an object for repeat use
          * @param object {any} The object to be cached
@@ -2439,7 +2449,7 @@ declare namespace egret {
      * @includeExample extension/game/utils/setInterval.ts
      * @language zh_CN
      */
-    function setInterval<Z>(listener: (this: Z, ...arg) => void, thisObject: Z, delay: number, ...args: any[]): number;
+    function setInterval<Z>(listener: (this: Z, ...arg: any[]) => void, thisObject: Z, delay: number, ...args: any[]): number;
     /**
      * Clear function to run after a specified delay.
      * @param key {number} Index that egret.setInterval returns
@@ -2483,7 +2493,7 @@ declare namespace egret {
      * @includeExample extension/game/utils/setTimeout.ts
      * @language zh_CN
      */
-    function setTimeout<Z>(listener: (this: Z, ...arg) => void, thisObject: Z, delay: number, ...args: any[]): number;
+    function setTimeout<Z>(listener: (this: Z, ...arg: any[]) => void, thisObject: Z, delay: number, ...args: any[]): number;
     /**
      * Function run after the specified delay is cleared.
      * @param key {number} Index that egret.setTimeout returns
