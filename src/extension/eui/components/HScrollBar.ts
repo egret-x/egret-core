@@ -56,9 +56,14 @@ namespace eui {
      */
     export class HScrollBar extends ScrollBarBase {
 
+        // Cached natural thumb width from the last full updateDisplayList pass.
+        // Used by syncThumb() to update thumb position without going through Validator.
+        // 0 means cache is invalid and a full layout pass is needed.
+        $cachedThumbWidth: number = 0;
+
         /**
          * @inheritDoc
-         * 
+         *
          * @version Egret 2.4
          * @version eui 1.0
          * @platform Web,Native
@@ -68,6 +73,7 @@ namespace eui {
             let thumb = this.thumb;
             let viewport = this.$viewport;
             if (!thumb || !viewport) {
+                this.$cachedThumbWidth = 0;
                 return;
             }
             let bounds = egret.$TempRectangle;
@@ -94,6 +100,38 @@ namespace eui {
                 thumb.setLayoutBoundsSize(NaN, NaN);
                 thumb.setLayoutBoundsPosition(thumbX, thumbY);
             }
+            this.$cachedThumbWidth = thumbWidth;
+        }
+
+        // Imperative thumb sync called by Scroller on every scroll frame.
+        // Bypasses Validator entirely; falls back to full layout on first call.
+        public syncThumb(): void {
+            let thumb = this.thumb;
+            let viewport = this.$viewport;
+            if (!thumb || !viewport) return;
+            if (this.$cachedThumbWidth <= 0) {
+                this.invalidateDisplayList();
+                return;
+            }
+            let hsp = viewport.scrollH;
+            let contentWidth = viewport.contentWidth;
+            let width = viewport.width;
+            let thumbWidth = this.$cachedThumbWidth;
+            let barWidth = this.width;
+            let thumbY = thumb.y;
+            if (hsp <= 0) {
+                let scaleWidth = Math.max(5, Math.round(thumbWidth * (1 - (-hsp) / (width * 0.5))));
+                thumb.setLayoutBoundsSize(scaleWidth, NaN);
+                thumb.setLayoutBoundsPosition(0, thumbY);
+            } else if (hsp >= contentWidth - width) {
+                let scaleWidth = Math.max(5, Math.round(thumbWidth * (1 - (hsp - contentWidth + width) / (width * 0.5))));
+                thumb.setLayoutBoundsSize(scaleWidth, NaN);
+                thumb.setLayoutBoundsPosition(barWidth - scaleWidth, thumbY);
+            } else {
+                let thumbX = (barWidth - thumbWidth) * hsp / (contentWidth - width);
+                thumb.setLayoutBoundsSize(NaN, NaN);
+                thumb.setLayoutBoundsPosition(thumbX, thumbY);
+            }
         }
 
         /**
@@ -105,7 +143,6 @@ namespace eui {
          */
         protected onPropertyChanged(event:eui.PropertyEvent):void {
             switch (event.property) {
-                case "scrollH":
                 case "contentWidth":
                     this.invalidateDisplayList();
                     break;

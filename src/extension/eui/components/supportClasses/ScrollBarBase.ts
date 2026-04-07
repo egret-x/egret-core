@@ -152,13 +152,11 @@ namespace eui {
             let viewport = this.$viewport;
             if (viewport)
             {
-                viewport.removeEventListener(eui.PropertyEvent.PROPERTY_CHANGE, this.onPropertyChanged,this);
                 viewport.removeEventListener(egret.Event.RESIZE, this.onViewportResize,this);
             }
             this.$viewport = value;
             if (value)
             {
-                value.addEventListener(eui.PropertyEvent.PROPERTY_CHANGE, this.onPropertyChanged,this);
                 value.addEventListener(egret.Event.RESIZE, this.onViewportResize,this);
             }
             this.invalidateDisplayList();

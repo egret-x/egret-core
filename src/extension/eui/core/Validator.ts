@@ -60,6 +60,12 @@ namespace eui.sys {
 
         /**
          * @private
+         * 是否已经添加了tick监听
+         */
+        private tickAttached:boolean = false;
+
+        /**
+         * @private
          */
         private invalidatePropertiesQueue:DepthQueue = new DepthQueue();
 
@@ -185,10 +191,6 @@ namespace eui.sys {
 
         /**
          * @private
-         */
-        private eventDisplay:egret.Bitmap = new egret.Bitmap();
-        /**
-         * @private
          * 是否已经添加了事件监听
          */
         private listenersAttached:boolean = false;
@@ -198,20 +200,20 @@ namespace eui.sys {
          * 添加事件监听
          */
         private attachListeners():void {
-            this.eventDisplay.addEventListener(egret.Event.ENTER_FRAME, this.doPhasedInstantiationCallBack, this);
-            this.eventDisplay.addEventListener(egret.Event.RENDER, this.doPhasedInstantiationCallBack, this);
-            egret.sys.$invalidateRenderFlag = true;
+            if (!this.tickAttached) {
+                this.tickAttached = true;
+                egret.startTick(this.onTick, this);
+            }
             this.listenersAttached = true;
         }
 
         /**
          * @private
-         * 执行属性应用
+         * tick回调
          */
-        private doPhasedInstantiationCallBack(event?:egret.Event):void {
-            this.eventDisplay.removeEventListener(egret.Event.ENTER_FRAME, this.doPhasedInstantiationCallBack, this);
-            this.eventDisplay.removeEventListener(egret.Event.RENDER, this.doPhasedInstantiationCallBack, this);
+        private onTick(timeStamp:number):boolean {
             this.doPhasedInstantiation();
+            return true;
         }
 
         /**
@@ -236,6 +238,10 @@ namespace eui.sys {
                 this.attachListeners();
             }
             else {
+                if (this.tickAttached) {
+                    this.tickAttached = false;
+                    egret.stopTick(this.onTick, this);
+                }
                 this.listenersAttached = false;
             }
         }
@@ -575,12 +581,13 @@ namespace eui.sys {
         public remove(client:UIComponent):void {
             let index = this.items.indexOf(client);
             if (index >= 0) {
-                this.items.splice(index, 1);
                 this.length--;
-                if(this.length===0){
+                if (this.length === 0) {
+                    this.items.length = 0;
                     this.map = {};//清空所有key防止内存泄露
-                }
-                else{
+                } else {
+                    this.items[index] = this.items[this.length];
+                    this.items.length = this.length;
                     this.map[client.$hashCode] = false;
                 }
             }

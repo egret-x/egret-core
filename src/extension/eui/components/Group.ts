@@ -41,7 +41,9 @@ namespace eui {
         scrollH,
         scrollV,
         scrollEnabled,
-        touchThrough
+        touchThrough,
+        scrollRectCache,
+        isScrolling
     }
 
     /**
@@ -98,6 +100,8 @@ namespace eui {
                 3: 0,        //scrollV,
                 4: false,    //scrollEnabled,
                 5: false,    //touchThrough
+                6: null,     //scrollRectCache - 预创建的 scrollRect 对象
+                7: false     //isScrolling - 滚动中标记，滚动时暂停布局验证
             };
             this.$stateValues.parent = this;
         }
@@ -274,6 +278,49 @@ namespace eui {
         }
 
         /**
+         * @private
+         * 开始滚动，暂停布局验证以提升性能
+         */
+        public setScrollBegin():void {
+            this.$Group[Keys.isScrolling] = true;
+        }
+
+        /**
+         * @private
+         * 结束滚动，恢复布局验证并触发更新
+         */
+        public setScrollEnd():void {
+            let values = this.$Group;
+            values[Keys.isScrolling] = false;
+            if (this.$layout && values[Keys.scrollEnabled]) {
+                this.$layout.scrollPositionChanged();
+            }
+        }
+
+        /**
+         * @private
+         * High-performance scroll path: updates scroll position and scrollRect directly,
+         * bypassing layout validation. Still dispatches PropertyEvent for external listeners.
+         * Virtual layouts receive scrollPositionChanged() to recycle/create renderers.
+         */
+        public scrollDirect(h: number, v: number): void {
+            let values = this.$Group;
+            h = +h || 0;
+            v = +v || 0;
+            let hChanged = h !== values[Keys.scrollH];
+            let vChanged = v !== values[Keys.scrollV];
+            if (!hChanged && !vChanged) return;
+            values[Keys.scrollH] = h;
+            values[Keys.scrollV] = v;
+            this.updateScrollRect();
+            if (this.$layout && this.$layout.useVirtualLayout) {
+                this.$layout.scrollPositionChanged();
+            }
+            if (hChanged) PropertyEvent.dispatchPropertyEvent(this, PropertyEvent.PROPERTY_CHANGE, "scrollH");
+            if (vChanged) PropertyEvent.dispatchPropertyEvent(this, PropertyEvent.PROPERTY_CHANGE, "scrollV");
+        }
+
+        /**
          * @copy eui.IViewport#scrollH
          *
          * @version Egret 2.4
@@ -290,7 +337,8 @@ namespace eui {
             if (value === values[Keys.scrollH])
                 return;
             values[Keys.scrollH] = value;
-            if (this.updateScrollRect() && this.$layout) {
+            this.updateScrollRect();
+            if (this.$layout && (!values[Keys.isScrolling] || this.$layout.useVirtualLayout)) {
                 this.$layout.scrollPositionChanged();
             }
             PropertyEvent.dispatchPropertyEvent(this, PropertyEvent.PROPERTY_CHANGE, "scrollH");
@@ -313,7 +361,8 @@ namespace eui {
             if (value == values[Keys.scrollV])
                 return;
             values[Keys.scrollV] = value;
-            if (this.updateScrollRect() && this.$layout) {
+            this.updateScrollRect();
+            if (this.$layout && (!values[Keys.isScrolling] || this.$layout.useVirtualLayout)) {
                 this.$layout.scrollPositionChanged();
             }
             PropertyEvent.dispatchPropertyEvent(this, PropertyEvent.PROPERTY_CHANGE, "scrollV");
@@ -329,9 +378,16 @@ namespace eui {
             let hasClip = values[Keys.scrollEnabled];
             if (hasClip) {
                 let uiValues = this.$UIComponent;
-                this.scrollRect = egret.$TempRectangle.setTo(values[Keys.scrollH],
-                    values[Keys.scrollV],
-                    uiValues[sys.UIKeys.width], uiValues[sys.UIKeys.height]);
+                let rect = values[Keys.scrollRectCache];
+                if (!rect) {
+                    rect = new egret.Rectangle();
+                    values[Keys.scrollRectCache] = rect;
+                }
+                rect.x = values[Keys.scrollH];
+                rect.y = values[Keys.scrollV];
+                rect.width = uiValues[sys.UIKeys.width];
+                rect.height = uiValues[sys.UIKeys.height];
+                this.scrollRect = rect;
             }
             else if (this.$scrollRect) {
                 this.scrollRect = null;

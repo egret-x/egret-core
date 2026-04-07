@@ -56,6 +56,11 @@ namespace eui {
      */
     export class VScrollBar extends ScrollBarBase {
 
+        // Cached natural thumb height from the last full updateDisplayList pass.
+        // Used by syncThumb() to update thumb position without going through Validator.
+        // 0 means cache is invalid and a full layout pass is needed.
+        $cachedThumbHeight: number = 0;
+
         /**
          * @inheritDoc
          *
@@ -68,6 +73,7 @@ namespace eui {
             let thumb = this.thumb;
             let viewport = this.$viewport;
             if (!thumb || !viewport) {
+                this.$cachedThumbHeight = 0;
                 return;
             }
             let bounds = egret.$TempRectangle;
@@ -94,8 +100,39 @@ namespace eui {
                 thumb.setLayoutBoundsSize(NaN, NaN);
                 thumb.setLayoutBoundsPosition(thumbX, thumbY);
             }
+            this.$cachedThumbHeight = thumbHeight;
         }
 
+        // Imperative thumb sync called by Scroller on every scroll frame.
+        // Bypasses Validator entirely; falls back to full layout on first call.
+        public syncThumb(): void {
+            let thumb = this.thumb;
+            let viewport = this.$viewport;
+            if (!thumb || !viewport) return;
+            if (this.$cachedThumbHeight <= 0) {
+                this.invalidateDisplayList();
+                return;
+            }
+            let vsp = viewport.scrollV;
+            let contentHeight = viewport.contentHeight;
+            let height = viewport.height;
+            let thumbHeight = this.$cachedThumbHeight;
+            let barHeight = this.height;
+            let thumbX = thumb.x;
+            if (vsp <= 0) {
+                let scaleHeight = Math.max(5, Math.round(thumbHeight * (1 - (-vsp) / (height * 0.5))));
+                thumb.setLayoutBoundsSize(NaN, scaleHeight);
+                thumb.setLayoutBoundsPosition(thumbX, 0);
+            } else if (vsp >= contentHeight - height) {
+                let scaleHeight = Math.max(5, Math.round(thumbHeight * (1 - (vsp - contentHeight + height) / (height * 0.5))));
+                thumb.setLayoutBoundsSize(NaN, scaleHeight);
+                thumb.setLayoutBoundsPosition(thumbX, barHeight - scaleHeight);
+            } else {
+                let thumbY = (barHeight - thumbHeight) * vsp / (contentHeight - height);
+                thumb.setLayoutBoundsSize(NaN, NaN);
+                thumb.setLayoutBoundsPosition(thumbX, thumbY);
+            }
+        }
 
         /**
          * @inheritDoc
@@ -106,7 +143,6 @@ namespace eui {
          */
         protected onPropertyChanged(event:eui.PropertyEvent):void {
             switch (event.property) {
-                case "scrollV":
                 case "contentHeight":
                     this.invalidateDisplayList();
                     break;

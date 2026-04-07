@@ -132,6 +132,29 @@ namespace eui {
         public static scrollThreshold:number = 5;
 
         /**
+         * Whether to pause layout validation while scrolling.
+         * When enabled, the viewport skips layout updates during scroll and applies them once scrolling ends.
+         *
+         * @default true
+         *
+         * @version Egret 2.4
+         * @version eui 1.0
+         * @platform Web,Native
+         * @language en_US
+         */
+        /**
+         * 滚动时是否暂停布局验证，开启后滚动结束统一触发一次布局。
+         *
+         * @default true
+         *
+         * @version Egret 2.4
+         * @version eui 1.0
+         * @platform Web,Native
+         * @language zh_CN
+         */
+        public static scrollDisableLayout:boolean = true;
+
+        /**
          * Constructor.
          *
          * @version Egret 2.4
@@ -673,6 +696,11 @@ namespace eui {
                 values[Keys.touchMoved] = true;
                 this.dispatchCancelEvent(event);
 
+                let viewport = values[Keys.viewport];
+                if (Scroller.scrollDisableLayout && viewport && 'setScrollBegin' in viewport) {
+                    (<any>viewport).setScrollBegin();
+                }
+
                 let horizontalBar = this.horizontalScrollBar;
                 let verticalBar = this.verticalScrollBar;
                 if (horizontalBar && horizontalBar.autoVisibility && values[Keys.horizontalCanScroll]) {
@@ -783,9 +811,13 @@ namespace eui {
             let values = this.$Scroller;
             values[Keys.touchMoved] = false;
 
+            let viewport = values[Keys.viewport];
+            if (Scroller.scrollDisableLayout && viewport && 'setScrollEnd' in viewport) {
+                (<any>viewport).setScrollEnd();
+            }
+
             this.onRemoveListeners();
 
-            let viewport:IViewport = values[Keys.viewport];
             let uiValues = viewport.$UIComponent;
             if (values[Keys.touchScrollH].isStarted()) {
                 values[Keys.touchScrollH].finish(viewport.scrollH, viewport.contentWidth - uiValues[sys.UIKeys.width]);
@@ -806,9 +838,13 @@ namespace eui {
             this.removeEventListener(egret.TouchEvent.TOUCH_CANCEL, this.onTouchCancel, this);
             this.removeEventListener(egret.Event.REMOVED_FROM_STAGE, this.onRemoveListeners, this);
 
-            
+
             let values = this.$Scroller;
             let viewport:IViewport = values[Keys.viewport];
+            if (Scroller.scrollDisableLayout && viewport && 'setScrollEnd' in viewport) {
+                (<any>viewport).setScrollEnd();
+            }
+
             let uiValues = viewport.$UIComponent;
             if (values[Keys.touchScrollH].isStarted()) {
                 values[Keys.touchScrollH].finish(viewport.scrollH, viewport.contentWidth - uiValues[sys.UIKeys.width]);
@@ -824,9 +860,11 @@ namespace eui {
          * @param scrollPos
          */
         private horizontalUpdateHandler(scrollPos: number): void {
-            const viewport = this.$Scroller[Keys.viewport];
+            const viewport = this.$Scroller[Keys.viewport] as any;
             if (viewport) {
-                viewport.scrollH = scrollPos;
+                viewport.scrollDirect(scrollPos, viewport.scrollV);
+                let hBar = this.horizontalScrollBar as HScrollBar;
+                if (hBar) hBar.syncThumb();
             }
             this.dispatchEventWith(egret.Event.CHANGE);
         }
@@ -837,9 +875,11 @@ namespace eui {
          * @param scrollPos
          */
         private verticalUpdateHandler(scrollPos: number): void {
-            const viewport = this.$Scroller[Keys.viewport];
+            const viewport = this.$Scroller[Keys.viewport] as any;
             if (viewport) {
-                viewport.scrollV = scrollPos;
+                viewport.scrollDirect(viewport.scrollH, scrollPos);
+                let vBar = this.verticalScrollBar as VScrollBar;
+                if (vBar) vBar.syncThumb();
             }
             this.dispatchEventWith(egret.Event.CHANGE);
         }
