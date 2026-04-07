@@ -169,6 +169,92 @@ var eui;
     (function (sys) {
         /**
          * @private
+         * Single-array queue sorted by nestLevel on drain.
+         * Deduplication is handled upstream in UIComponent.$dirtyFlags, so no hash map is needed.
+         */
+        var FlatQueue = (function () {
+            function FlatQueue() {
+                this.items = [];
+                this.count = 0;
+            }
+            FlatQueue.prototype.enqueue = function (client) {
+                this.items[this.count++] = client;
+            };
+            /**
+             * Sort ascending (shallowest first) and process the current snapshot.
+             * Items enqueued during processing are kept for the next drain call.
+             */
+            FlatQueue.prototype.drainAsc = function (process) {
+                if (this.count === 0)
+                    return;
+                var n = this.count;
+                var arr = this.items;
+                // insertion sort ascending by nestLevel (nearly sorted in practice)
+                for (var i = 1; i < n; i++) {
+                    var cur = arr[i];
+                    var level = cur.$nestLevel;
+                    var j = i - 1;
+                    while (j >= 0 && arr[j].$nestLevel > level) {
+                        arr[j + 1] = arr[j];
+                        j--;
+                    }
+                    arr[j + 1] = cur;
+                }
+                for (var i = 0; i < n; i++) {
+                    var c = arr[i];
+                    arr[i] = null;
+                    if (c.$stage)
+                        process(c);
+                }
+                // slide items added during processing to the front
+                var added = this.count - n;
+                for (var i = 0; i < added; i++) {
+                    arr[i] = arr[n + i];
+                    arr[n + i] = null;
+                }
+                this.count = added;
+            };
+            /**
+             * Sort descending (deepest first) and process the current snapshot.
+             * Items enqueued during processing are kept for the next drain call.
+             */
+            FlatQueue.prototype.drainDesc = function (process) {
+                if (this.count === 0)
+                    return;
+                var n = this.count;
+                var arr = this.items;
+                // insertion sort descending by nestLevel
+                for (var i = 1; i < n; i++) {
+                    var cur = arr[i];
+                    var level = cur.$nestLevel;
+                    var j = i - 1;
+                    while (j >= 0 && arr[j].$nestLevel < level) {
+                        arr[j + 1] = arr[j];
+                        j--;
+                    }
+                    arr[j + 1] = cur;
+                }
+                for (var i = 0; i < n; i++) {
+                    var c = arr[i];
+                    arr[i] = null;
+                    if (c.$stage)
+                        process(c);
+                }
+                var added = this.count - n;
+                for (var i = 0; i < added; i++) {
+                    arr[i] = arr[n + i];
+                    arr[n + i] = null;
+                }
+                this.count = added;
+            };
+            FlatQueue.prototype.isEmpty = function () {
+                return this.count === 0;
+            };
+            return FlatQueue;
+        }());
+        __reflect(FlatQueue.prototype, "FlatQueue");
+        /**
+         * @private
          * 失效验证管理器
          */
         var Validator = (function (_super) {
@@ -185,46 +271,26 @@ var eui;
                 _this.targetLevel = Number.POSITIVE_INFINITY;
                 /**
                  * @private
-                 */
-                _this.invalidatePropertiesFlag = false;
-                /**
-                 * @private
-                 */
-                _this.invalidateClientPropertiesFlag = false;
-                /**
-                 * @private
                  * 是否已经添加了tick监听
                  */
                 _this.tickAttached = false;
                 /**
                  * @private
-                 */
-                _this.invalidatePropertiesQueue = new DepthQueue();
-                /**
-                 * @private
-                 */
-                _this.invalidateSizeFlag = false;
-                /**
-                 * @private
-                 */
-                _this.invalidateClientSizeFlag = false;
-                /**
-                 * @private
-                 */
-                _this.invalidateSizeQueue = new DepthQueue();
-                /**
-                 * @private
-                 */
-                _this.invalidateDisplayListFlag = false;
-                /**
-                 * @private
-                 */
-                _this.invalidateDisplayListQueue = new DepthQueue();
-                /**
-                 * @private
                  * 是否已经添加了事件监听
                  */
                 _this.listenersAttached = false;
+                /**
+                 * @private
+                 */
+                _this.propertiesQueue = new FlatQueue();
+                /**
+                 * @private
+                 */
+                _this.sizeQueue = new FlatQueue();
+                /**
+                 * @private
+                 */
+                _this.displayListQueue = new FlatQueue();
                 return _this;
             }
             /**
@@ -232,88 +298,27 @@ var eui;
              * 标记组件属性失效
              */
             Validator.prototype.invalidateProperties = function (client) {
-                if (!this.invalidatePropertiesFlag) {
-                    this.invalidatePropertiesFlag = true;
-                    if (!this.listenersAttached)
-                        this.attachListeners();
-                }
-                if (this.targetLevel <= client.$nestLevel)
-                    this.invalidateClientPropertiesFlag = true;
-                this.invalidatePropertiesQueue.insert(client);
-            };
-            /**
-             * @private
-             * 验证失效的属性
-             */
-            Validator.prototype.validateProperties = function () {
-                var queue = this.invalidatePropertiesQueue;
-                var client = queue.shift();
-                while (client) {
-                    if (client.$stage) {
-                        client.validateProperties();
-                    }
-                    client = queue.shift();
-                }
-                if (queue.isEmpty())
-                    this.invalidatePropertiesFlag = false;
+                this.propertiesQueue.enqueue(client);
+                if (!this.listenersAttached)
+                    this.attachListeners();
             };
             /**
              * @private
              * 标记需要重新测量尺寸
              */
             Validator.prototype.invalidateSize = function (client) {
-                if (!this.invalidateSizeFlag) {
-                    this.invalidateSizeFlag = true;
-                    if (!this.listenersAttached)
-                        this.attachListeners();
-                }
-                if (this.targetLevel <= client.$nestLevel)
-                    this.invalidateClientSizeFlag = true;
-                this.invalidateSizeQueue.insert(client);
-            };
-            /**
-             * @private
-             * 测量尺寸
-             */
-            Validator.prototype.validateSize = function () {
-                var queue = this.invalidateSizeQueue;
-                var client = queue.pop();
-                while (client) {
-                    if (client.$stage) {
-                        client.validateSize();
-                    }
-                    client = queue.pop();
-                }
-                if (queue.isEmpty())
-                    this.invalidateSizeFlag = false;
+                this.sizeQueue.enqueue(client);
+                if (!this.listenersAttached)
+                    this.attachListeners();
             };
             /**
              * @private
              * 标记需要重新布局
              */
             Validator.prototype.invalidateDisplayList = function (client) {
-                if (!this.invalidateDisplayListFlag) {
-                    this.invalidateDisplayListFlag = true;
-                    if (!this.listenersAttached)
-                        this.attachListeners();
-                }
-                this.invalidateDisplayListQueue.insert(client);
-            };
-            /**
-             * @private
-             * 重新布局
-             */
-            Validator.prototype.validateDisplayList = function () {
-                var queue = this.invalidateDisplayListQueue;
-                var client = queue.shift();
-                while (client) {
-                    if (client.$stage) {
-                        client.validateDisplayList();
-                    }
-                    client = queue.shift();
-                }
-                if (queue.isEmpty())
-                    this.invalidateDisplayListFlag = false;
+                this.displayListQueue.enqueue(client);
+                if (!this.listenersAttached)
+                    this.attachListeners();
             };
             /**
              * @private
@@ -336,24 +341,14 @@ var eui;
             };
             /**
              * @private
-             *
              */
             Validator.prototype.doPhasedInstantiation = function () {
-                if (this.invalidatePropertiesFlag) {
-                    this.validateProperties();
-                }
-                if (this.invalidateSizeFlag) {
-                    this.validateSize();
-                }
-                if (this.invalidateDisplayListFlag) {
-                    this.validateDisplayList();
-                }
-                if (this.invalidatePropertiesFlag ||
-                    this.invalidateSizeFlag ||
-                    this.invalidateDisplayListFlag) {
-                    this.attachListeners();
-                }
-                else {
+                this.propertiesQueue.drainAsc(function (c) { return c.validateProperties(); });
+                this.sizeQueue.drainDesc(function (c) { return c.validateSize(); });
+                this.displayListQueue.drainAsc(function (c) { return c.validateDisplayList(); });
+                if (this.propertiesQueue.count === 0 &&
+                    this.sizeQueue.count === 0 &&
+                    this.displayListQueue.count === 0) {
                     if (this.tickAttached) {
                         this.tickAttached = false;
                         egret.stopTick(this.onTick, this);
@@ -367,315 +362,106 @@ var eui;
              * @param target 要立即应用属性的组件
              */
             Validator.prototype.validateClient = function (target) {
-                var obj;
-                var done = false;
                 var oldTargetLevel = this.targetLevel;
                 if (this.targetLevel === Number.POSITIVE_INFINITY)
                     this.targetLevel = target.$nestLevel;
-                var propertiesQueue = this.invalidatePropertiesQueue;
-                var sizeQueue = this.invalidateSizeQueue;
-                var displayListQueue = this.invalidateDisplayListQueue;
+                var done = false;
                 while (!done) {
                     done = true;
-                    obj = propertiesQueue.removeSmallestChild(target);
+                    var obj = this.removeSubtreeItem(this.propertiesQueue, target, false);
                     while (obj) {
-                        if (obj.$stage) {
+                        if (obj.$stage)
                             obj.validateProperties();
-                        }
-                        obj = propertiesQueue.removeSmallestChild(target);
+                        obj = this.removeSubtreeItem(this.propertiesQueue, target, false);
                     }
-                    if (propertiesQueue.isEmpty()) {
-                        this.invalidatePropertiesFlag = false;
-                    }
-                    this.invalidateClientPropertiesFlag = false;
-                    obj = sizeQueue.removeLargestChild(target);
+                    obj = this.removeSubtreeItem(this.sizeQueue, target, true);
                     while (obj) {
-                        if (obj.$stage) {
+                        if (obj.$stage)
                             obj.validateSize();
+                        if (this.hasSubtreeItems(this.propertiesQueue, target)) {
+                            done = false;
+                            break;
                         }
-                        if (this.invalidateClientPropertiesFlag) {
-                            obj = (propertiesQueue.removeSmallestChild(target));
-                            if (obj) {
-                                propertiesQueue.insert(obj);
-                                done = false;
-                                break;
-                            }
-                        }
-                        obj = sizeQueue.removeLargestChild(target);
+                        obj = this.removeSubtreeItem(this.sizeQueue, target, true);
                     }
-                    if (sizeQueue.isEmpty()) {
-                        this.invalidateSizeFlag = false;
-                    }
-                    this.invalidateClientPropertiesFlag = false;
-                    this.invalidateClientSizeFlag = false;
-                    obj = displayListQueue.removeSmallestChild(target);
+                    obj = this.removeSubtreeItem(this.displayListQueue, target, false);
                     while (obj) {
-                        if (obj.$stage) {
+                        if (obj.$stage)
                             obj.validateDisplayList();
+                        if (this.hasSubtreeItems(this.propertiesQueue, target) ||
+                            this.hasSubtreeItems(this.sizeQueue, target)) {
+                            done = false;
+                            break;
                         }
-                        if (this.invalidateClientPropertiesFlag) {
-                            obj = propertiesQueue.removeSmallestChild(target);
-                            if (obj) {
-                                propertiesQueue.insert(obj);
-                                done = false;
-                                break;
-                            }
-                        }
-                        if (this.invalidateClientSizeFlag) {
-                            obj = sizeQueue.removeLargestChild(target);
-                            if (obj) {
-                                sizeQueue.insert(obj);
-                                done = false;
-                                break;
-                            }
-                        }
-                        obj = displayListQueue.removeSmallestChild(target);
-                    }
-                    if (displayListQueue.isEmpty()) {
-                        this.invalidateDisplayListFlag = false;
+                        obj = this.removeSubtreeItem(this.displayListQueue, target, false);
                     }
                 }
-                if (oldTargetLevel === Number.POSITIVE_INFINITY) {
+                if (oldTargetLevel === Number.POSITIVE_INFINITY)
                     this.targetLevel = Number.POSITIVE_INFINITY;
+            };
+            /**
+             * @private
+             * Remove and return an item from the queue that belongs to target's subtree.
+             * When maxLevel is true, returns the deepest matching item; otherwise the shallowest.
+             */
+            Validator.prototype.removeSubtreeItem = function (queue, target, maxLevel) {
+                var nestLevel = target.$nestLevel;
+                var arr = queue.items;
+                var n = queue.count;
+                if (n === 0)
+                    return null;
+                var bestIdx = -1;
+                var bestLevel = maxLevel ? -1 : 2147483647;
+                var isContainer = egret.is(target, "egret.DisplayObjectContainer");
+                for (var i = 0; i < n; i++) {
+                    var c = arr[i];
+                    if (c.$nestLevel < nestLevel)
+                        continue;
+                    var isSelf = c === target;
+                    if (!isSelf) {
+                        if (!isContainer)
+                            continue;
+                        if (!target.contains(c))
+                            continue;
+                    }
+                    if (maxLevel ? c.$nestLevel > bestLevel : c.$nestLevel < bestLevel) {
+                        bestLevel = c.$nestLevel;
+                        bestIdx = i;
+                    }
                 }
+                if (bestIdx < 0)
+                    return null;
+                var result = arr[bestIdx];
+                // swap-remove to avoid O(n) shift
+                queue.count--;
+                arr[bestIdx] = arr[queue.count];
+                arr[queue.count] = null;
+                return result;
+            };
+            /**
+             * @private
+             * Check whether the queue contains any item that belongs to target's subtree.
+             */
+            Validator.prototype.hasSubtreeItems = function (queue, target) {
+                var nestLevel = target.$nestLevel;
+                var arr = queue.items;
+                var n = queue.count;
+                var isContainer = egret.is(target, "egret.DisplayObjectContainer");
+                for (var i = 0; i < n; i++) {
+                    var c = arr[i];
+                    if (c.$nestLevel < nestLevel)
+                        continue;
+                    if (c === target)
+                        return true;
+                    if (isContainer && target.contains(c))
+                        return true;
+                }
+                return false;
             };
             return Validator;
         }(egret.EventDispatcher));
         sys.Validator = Validator;
         __reflect(Validator.prototype, "eui.sys.Validator");
-        /**
-         * @private
-         * 显示列表嵌套深度排序队列
-         */
-        var DepthQueue = (function () {
-            function DepthQueue() {
-                /**
-                 * 深度队列
-                 */
-                this.depthBins = {};
-                /**
-                 * 最小深度
-                 */
-                this.minDepth = 0;
-                /**
-                 * 最大深度
-                 */
-                this.maxDepth = -1;
-            }
-            /**
-             * 插入一个元素
-             */
-            DepthQueue.prototype.insert = function (client) {
-                var depth = client.$nestLevel;
-                if (this.maxDepth < this.minDepth) {
-                    this.minDepth = this.maxDepth = depth;
-                }
-                else {
-                    if (depth < this.minDepth)
-                        this.minDepth = depth;
-                    if (depth > this.maxDepth)
-                        this.maxDepth = depth;
-                }
-                var bin = this.depthBins[depth];
-                if (!bin) {
-                    bin = this.depthBins[depth] = new DepthBin();
-                }
-                bin.insert(client);
-            };
-            /**
-             * 从队列尾弹出深度最大的一个对象
-             */
-            DepthQueue.prototype.pop = function () {
-                var client;
-                var minDepth = this.minDepth;
-                if (minDepth <= this.maxDepth) {
-                    var bin = this.depthBins[this.maxDepth];
-                    while (!bin || bin.length === 0) {
-                        this.maxDepth--;
-                        if (this.maxDepth < minDepth)
-                            return null;
-                        bin = this.depthBins[this.maxDepth];
-                    }
-                    client = bin.pop();
-                    while (!bin || bin.length == 0) {
-                        this.maxDepth--;
-                        if (this.maxDepth < minDepth)
-                            break;
-                        bin = this.depthBins[this.maxDepth];
-                    }
-                }
-                return client;
-            };
-            /**
-             * 从队列首弹出深度最小的一个对象
-             */
-            DepthQueue.prototype.shift = function () {
-                var client;
-                var maxDepth = this.maxDepth;
-                if (this.minDepth <= maxDepth) {
-                    var bin = this.depthBins[this.minDepth];
-                    while (!bin || bin.length === 0) {
-                        this.minDepth++;
-                        if (this.minDepth > maxDepth)
-                            return null;
-                        bin = this.depthBins[this.minDepth];
-                    }
-                    client = bin.pop();
-                    while (!bin || bin.length == 0) {
-                        this.minDepth++;
-                        if (this.minDepth > maxDepth)
-                            break;
-                        bin = this.depthBins[this.minDepth];
-                    }
-                }
-                return client;
-            };
-            /**
-             * 移除大于等于指定组件层级的元素中最大的元素
-             */
-            DepthQueue.prototype.removeLargestChild = function (client) {
-                var hashCode = client.$hashCode;
-                var nestLevel = client.$nestLevel;
-                var max = this.maxDepth;
-                var min = nestLevel;
-                while (min <= max) {
-                    var bin = this.depthBins[max];
-                    if (bin && bin.length > 0) {
-                        if (max === nestLevel) {
-                            if (bin.map[hashCode]) {
-                                bin.remove(client);
-                                return client;
-                            }
-                        }
-                        else if (egret.is(client, "egret.DisplayObjectContainer")) {
-                            var items = bin.items;
-                            var length_1 = bin.length;
-                            for (var i = 0; i < length_1; i++) {
-                                var value = items[i];
-                                if (client.contains(value)) {
-                                    bin.remove(value);
-                                    return value;
-                                }
-                            }
-                        }
-                        else {
-                            break;
-                        }
-                        max--;
-                    }
-                    else {
-                        if (max == this.maxDepth) {
-                            this.maxDepth--;
-                        }
-                        max--;
-                        if (max < min)
-                            break;
-                    }
-                }
-                return null;
-            };
-            /**
-             * 移除大于等于指定组件层级的元素中最小的元素
-             */
-            DepthQueue.prototype.removeSmallestChild = function (client) {
-                var nestLevel = client.$nestLevel;
-                var min = nestLevel;
-                var max = this.maxDepth;
-                var hashCode = client.$hashCode;
-                while (min <= max) {
-                    var bin = this.depthBins[min];
-                    if (bin && bin.length > 0) {
-                        if (min === nestLevel) {
-                            if (bin.map[hashCode]) {
-                                bin.remove(client);
-                                return client;
-                            }
-                        }
-                        else if (egret.is(client, "egret.DisplayObjectContainer")) {
-                            var items = bin.items;
-                            var length_2 = bin.length;
-                            for (var i = 0; i < length_2; i++) {
-                                var value = items[i];
-                                if (client.contains(value)) {
-                                    bin.remove(value);
-                                    return value;
-                                }
-                            }
-                        }
-                        else {
-                            break;
-                        }
-                        min++;
-                    }
-                    else {
-                        if (min == this.minDepth)
-                            this.minDepth++;
-                        min++;
-                        if (min > max)
-                            break;
-                    }
-                }
-                return null;
-            };
-            /**
-             * 队列是否为空
-             */
-            DepthQueue.prototype.isEmpty = function () {
-                return this.minDepth > this.maxDepth;
-            };
-            return DepthQueue;
-        }());
-        __reflect(DepthQueue.prototype, "DepthQueue");
-        /**
-         * @private
-         * 列表项
-         */
-        var DepthBin = (function () {
-            function DepthBin() {
-                this.map = {};
-                this.items = [];
-                this.length = 0;
-            }
-            DepthBin.prototype.insert = function (client) {
-                var hashCode = client.$hashCode;
-                if (this.map[hashCode]) {
-                    return;
-                }
-                this.map[hashCode] = true;
-                this.length++;
-                this.items.push(client);
-            };
-            DepthBin.prototype.pop = function () {
-                var client = this.items.pop(); //使用pop会比shift有更高的性能，避免索引整体重置。
-                if (client) {
-                    this.length--;
-                    if (this.length === 0) {
-                        this.map = {}; //清空所有key防止内存泄露
-                    }
-                    else {
-                        this.map[client.$hashCode] = false;
-                    }
-                }
-                return client;
-            };
-            DepthBin.prototype.remove = function (client) {
-                var index = this.items.indexOf(client);
-                if (index >= 0) {
-                    this.length--;
-                    if (this.length === 0) {
-                        this.items.length = 0;
-                        this.map = {}; //清空所有key防止内存泄露
-                    }
-                    else {
-                        this.items[index] = this.items[this.length];
-                        this.items.length = this.length;
-                        this.map[client.$hashCode] = false;
-                    }
-                }
-            };
-            return DepthBin;
-        }());
-        __reflect(DepthBin.prototype, "DepthBin");
     })(sys = eui.sys || (eui.sys = {}));
 })(eui || (eui = {}));
 //////////////////////////////////////////////////////////////////////////////////////
@@ -784,9 +570,9 @@ var eui;
                     21: 0,
                     22: 0,
                     23: 0,
-                    24: true,
-                    25: true,
-                    26: true,
+                    24: false,
+                    25: false,
+                    26: false,
                     27: false,
                     28: false,
                     29: false,
@@ -795,6 +581,7 @@ var eui;
                 //if egret
                 this.$touchEnabled = true;
                 //endif*/
+                this.$dirtyFlags = 7; // properties(1) | size(2) | displayList(4) all dirty on init
             };
             /**
              * @private
@@ -880,14 +667,13 @@ var eui;
              * 检查属性失效标记并应用
              */
             UIComponentImpl.prototype.checkInvalidateFlag = function (event) {
-                var values = this.$UIComponent;
-                if (values[24 /* invalidatePropertiesFlag */]) {
+                if (this.$dirtyFlags & 1) {
                     validator.invalidateProperties(this);
                 }
-                if (values[25 /* invalidateSizeFlag */]) {
+                if (this.$dirtyFlags & 2) {
                     validator.invalidateSize(this);
                 }
-                if (values[26 /* invalidateDisplayListFlag */]) {
+                if (this.$dirtyFlags & 4) {
                     validator.invalidateDisplayList(this);
                 }
             };
@@ -1336,9 +1122,8 @@ var eui;
              * 标记属性失效
              */
             UIComponentImpl.prototype.invalidateProperties = function () {
-                var values = this.$UIComponent;
-                if (!values[24 /* invalidatePropertiesFlag */]) {
-                    values[24 /* invalidatePropertiesFlag */] = true;
+                if (!(this.$dirtyFlags & 1)) {
+                    this.$dirtyFlags |= 1;
                     if (this.$stage)
                         validator.invalidateProperties(this);
                 }
@@ -1348,10 +1133,9 @@ var eui;
              * 验证组件的属性
              */
             UIComponentImpl.prototype.validateProperties = function () {
-                var values = this.$UIComponent;
-                if (values[24 /* invalidatePropertiesFlag */]) {
+                if (this.$dirtyFlags & 1) {
                     this.commitProperties();
-                    values[24 /* invalidatePropertiesFlag */] = false;
+                    this.$dirtyFlags &= ~1;
                 }
             };
             /**
@@ -1359,9 +1143,8 @@ var eui;
              * 标记提交过需要验证组件尺寸
              */
             UIComponentImpl.prototype.invalidateSize = function () {
-                var values = this.$UIComponent;
-                if (!values[25 /* invalidateSizeFlag */]) {
-                    values[25 /* invalidateSizeFlag */] = true;
+                if (!(this.$dirtyFlags & 2)) {
+                    this.$dirtyFlags |= 2;
                     if (this.$stage)
                         validator.invalidateSize(this);
                 }
@@ -1374,8 +1157,8 @@ var eui;
                 if (recursive) {
                     var children = this.$children;
                     if (children) {
-                        var length_3 = children.length;
-                        for (var i = 0; i < length_3; i++) {
+                        var length_1 = children.length;
+                        for (var i = 0; i < length_1; i++) {
                             var child = children[i];
                             if (egret.is(child, UIComponentClass)) {
                                 child.validateSize(true);
@@ -1383,14 +1166,13 @@ var eui;
                         }
                     }
                 }
-                var values = this.$UIComponent;
-                if (values[25 /* invalidateSizeFlag */]) {
+                if (this.$dirtyFlags & 2) {
                     var changed = this.measureSizes();
                     if (changed) {
                         this.invalidateDisplayList();
                         this.invalidateParentLayout();
                     }
-                    values[25 /* invalidateSizeFlag */] = false;
+                    this.$dirtyFlags &= ~2;
                 }
             };
             /**
@@ -1399,9 +1181,9 @@ var eui;
              */
             UIComponentImpl.prototype.measureSizes = function () {
                 var changed = false;
-                var values = this.$UIComponent;
-                if (!values[25 /* invalidateSizeFlag */])
+                if (!(this.$dirtyFlags & 2))
                     return changed;
+                var values = this.$UIComponent;
                 if (isNaN(values[8 /* explicitWidth */]) || isNaN(values[9 /* explicitHeight */])) {
                     this.measure();
                     if (values[16 /* measuredWidth */] < values[12 /* minWidth */]) {
@@ -1432,9 +1214,8 @@ var eui;
              * 标记需要验证显示列表
              */
             UIComponentImpl.prototype.invalidateDisplayList = function () {
-                var values = this.$UIComponent;
-                if (!values[26 /* invalidateDisplayListFlag */]) {
-                    values[26 /* invalidateDisplayListFlag */] = true;
+                if (!(this.$dirtyFlags & 4)) {
+                    this.$dirtyFlags |= 4;
                     if (this.$stage)
                         validator.invalidateDisplayList(this);
                 }
@@ -1444,11 +1225,11 @@ var eui;
              * 验证子项的位置和大小，并绘制其他可视内容
              */
             UIComponentImpl.prototype.validateDisplayList = function () {
-                var values = this.$UIComponent;
-                if (values[26 /* invalidateDisplayListFlag */]) {
+                if (this.$dirtyFlags & 4) {
+                    var values = this.$UIComponent;
                     this.updateFinalSize();
                     this.updateDisplayList(values[10 /* width */], values[11 /* height */]);
-                    values[26 /* invalidateDisplayListFlag */] = false;
+                    this.$dirtyFlags &= ~4;
                 }
             };
             /**
@@ -2050,8 +1831,8 @@ var eui;
                 var state = values.statesMap[values.oldState];
                 if (state) {
                     var overrides = state.overrides;
-                    var length_4 = overrides.length;
-                    for (var i = 0; i < length_4; i++) {
+                    var length_2 = overrides.length;
+                    for (var i = 0; i < length_2; i++) {
                         overrides[i].remove(this, parent);
                     }
                 }
@@ -2059,8 +1840,8 @@ var eui;
                 state = values.statesMap[values.currentState];
                 if (state) {
                     var overrides = state.overrides;
-                    var length_5 = overrides.length;
-                    for (var i = 0; i < length_5; i++) {
+                    var length_3 = overrides.length;
+                    for (var i = 0; i < length_3; i++) {
                         overrides[i].apply(this, parent);
                     }
                 }
@@ -2465,8 +2246,8 @@ var eui;
             var oldSkin = values[8 /* skin */];
             if (oldSkin) {
                 var skinParts = oldSkin.skinParts;
-                var length_6 = skinParts.length;
-                for (var i = 0; i < length_6; i++) {
+                var length_4 = skinParts.length;
+                for (var i = 0; i < length_4; i++) {
                     var partName = skinParts[i];
                     if (this[partName]) {
                         this.setSkinPart(partName, null);
@@ -2474,8 +2255,8 @@ var eui;
                 }
                 var children = oldSkin.$elementsContent;
                 if (children) {
-                    length_6 = children.length;
-                    for (var i = 0; i < length_6; i++) {
+                    length_4 = children.length;
+                    for (var i = 0; i < length_4; i++) {
                         var child = children[i];
                         if (child.$parent == this) {
                             this.removeChild(child);
@@ -2487,8 +2268,8 @@ var eui;
             values[8 /* skin */] = skin;
             if (skin) {
                 var skinParts = skin.skinParts;
-                var length_7 = skinParts.length;
-                for (var i = 0; i < length_7; i++) {
+                var length_5 = skinParts.length;
+                for (var i = 0; i < length_5; i++) {
                     var partName = skinParts[i];
                     var instance = skin[partName];
                     if (instance) {
@@ -3153,8 +2934,8 @@ var eui;
              */
             set: function (value) {
                 if (value) {
-                    var length_8 = value.length;
-                    for (var i = 0; i < length_8; i++) {
+                    var length_6 = value.length;
+                    for (var i = 0; i < length_6; i++) {
                         this.addChild(value[i]);
                     }
                 }
@@ -4481,8 +4262,8 @@ var eui;
                     if (this.$layout && this.$layout.$useVirtualLayout) {
                         var indexToRenderer = this.$indexToRenderer;
                         var keys = Object.keys(indexToRenderer);
-                        var length_9 = keys.length;
-                        for (var i = length_9 - 1; i >= 0; i--) {
+                        var length_7 = keys.length;
+                        for (var i = length_7 - 1; i >= 0; i--) {
                             var index = +keys[i];
                             this.freeRendererByIndex(index);
                         }
@@ -4619,8 +4400,8 @@ var eui;
                 return;
             if (this.$layout && this.$layout.$useVirtualLayout) {
                 var keys = Object.keys(indexToRenderer);
-                var length_10 = keys.length;
-                for (var i = 0; i < length_10; i++) {
+                var length_8 = keys.length;
+                for (var i = 0; i < length_8; i++) {
                     var index = +keys[i];
                     this.resetRendererItemIndex(index);
                 }
@@ -4842,19 +4623,19 @@ var eui;
                 var skinName = values[13 /* itemRendererSkinName */];
                 var indexToRenderer = this.$indexToRenderer;
                 var keys = Object.keys(indexToRenderer);
-                var length_11 = keys.length;
-                for (var i = 0; i < length_11; i++) {
+                var length_9 = keys.length;
+                for (var i = 0; i < length_9; i++) {
                     var index = keys[i];
                     this.setItemRenderSkinName(indexToRenderer[index], skinName);
                 }
                 var freeRenderers = values[3 /* freeRenderers */];
                 keys = Object.keys(freeRenderers);
-                length_11 = keys.length;
-                for (var i = 0; i < length_11; i++) {
+                length_9 = keys.length;
+                for (var i = 0; i < length_9; i++) {
                     var hashCode = keys[i];
                     var list = freeRenderers[hashCode];
-                    var length_12 = list.length;
-                    for (var i_1 = 0; i_1 < length_12; i_1++) {
+                    var length_10 = list.length;
+                    for (var i_1 = 0; i_1 < length_10; i_1++) {
                         this.setItemRenderSkinName(list[i_1], skinName);
                     }
                 }
@@ -4982,12 +4763,12 @@ var eui;
             if (values[10 /* cleanFreeRenderer */]) {
                 var freeRenderers = values[3 /* freeRenderers */];
                 var keys_1 = Object.keys(freeRenderers);
-                var length_13 = keys_1.length;
-                for (var i = 0; i < length_13; i++) {
+                var length_11 = keys_1.length;
+                for (var i = 0; i < length_11; i++) {
                     var hashCode = keys_1[i];
                     var list = freeRenderers[hashCode];
-                    var length_14 = list.length;
-                    for (var i_2 = 0; i_2 < length_14; i_2++) {
+                    var length_12 = list.length;
+                    for (var i_2 = 0; i_2 < length_12; i_2++) {
                         var renderer = list[i_2];
                         this.rendererRemoved(renderer, renderer.itemIndex, renderer.data);
                         this.removeChild(renderer);
@@ -7855,8 +7636,8 @@ var eui;
                 }
                 var children = xml.children;
                 if (children) {
-                    var length_15 = children.length;
-                    for (var i = 0; i < length_15; i++) {
+                    var length_13 = children.length;
+                    for (var i = 0; i < length_13; i++) {
                         var node = children[i];
                         if (node.nodeType !== 1 || this.isInnerClass(node)) {
                             continue;
@@ -7898,8 +7679,8 @@ var eui;
                 }
                 var children = declarations.children;
                 if (children) {
-                    var length_16 = children.length;
-                    for (var i = 0; i < length_16; i++) {
+                    var length_14 = children.length;
+                    for (var i = 0; i < length_14; i++) {
                         var node = children[i];
                         if (node.nodeType != 1) {
                             continue;
@@ -7955,13 +7736,13 @@ var eui;
                 if (hasClass && clazz) {
                     egret.registerClass(clazz, className);
                     var paths = className.split(".");
-                    var length_17 = paths.length;
+                    var length_15 = paths.length;
                     var definition = __global;
-                    for (var i = 0; i < length_17 - 1; i++) {
+                    for (var i = 0; i < length_15 - 1; i++) {
                         var path = paths[i];
                         definition = definition[path] || (definition[path] = {});
                     }
-                    if (definition[paths[length_17 - 1]]) {
+                    if (definition[paths[length_15 - 1]]) {
                         if (true && !parsedClasses[className]) {
                             egret.$warn(2101, className, codeText);
                         }
@@ -7970,7 +7751,7 @@ var eui;
                         if (true) {
                             parsedClasses[className] = true;
                         }
-                        definition[paths[length_17 - 1]] = clazz;
+                        definition[paths[length_15 - 1]] = clazz;
                     }
                 }
                 return clazz;
@@ -8028,13 +7809,13 @@ var eui;
                 if (hasClass && clazz) {
                     egret.registerClass(clazz, className);
                     var paths = className.split(".");
-                    var length_18 = paths.length;
+                    var length_16 = paths.length;
                     var definition = __global;
-                    for (var i = 0; i < length_18 - 1; i++) {
+                    for (var i = 0; i < length_16 - 1; i++) {
                         var path = paths[i];
                         definition = definition[path] || (definition[path] = {});
                     }
-                    if (definition[paths[length_18 - 1]]) {
+                    if (definition[paths[length_16 - 1]]) {
                         if (true && !parsedClasses[className]) {
                             egret.$warn(2101, className, toXMLString(xmlData));
                         }
@@ -8043,7 +7824,7 @@ var eui;
                         if (true) {
                             parsedClasses[className] = true;
                         }
-                        definition[paths[length_18 - 1]] = clazz;
+                        definition[paths[length_16 - 1]] = clazz;
                     }
                 }
                 return clazz;
@@ -8096,8 +7877,8 @@ var eui;
                 this.getStateNames();
                 var children = this.currentXML.children;
                 if (children) {
-                    var length_19 = children.length;
-                    for (var i = 0; i < length_19; i++) {
+                    var length_17 = children.length;
+                    for (var i = 0; i < length_17; i++) {
                         var node = children[i];
                         if (node.nodeType === 1 && node.namespace == sys.NS_W &&
                             node.localName == DECLARATIONS) {
@@ -8302,8 +8083,8 @@ var eui;
                 this.initlizeChildNode(node, cb, varName);
                 var delayAssignments = this.delayAssignmentDic[id];
                 if (delayAssignments) {
-                    var length_20 = delayAssignments.length;
-                    for (var i = 0; i < length_20; i++) {
+                    var length_18 = delayAssignments.length;
+                    for (var i = 0; i < length_18; i++) {
                         var codeBlock = delayAssignments[i];
                         cb.concat(codeBlock);
                     }
@@ -8338,8 +8119,8 @@ var eui;
                     case TYPE_ARRAY:
                         var values = [];
                         if (children) {
-                            var length_21 = children.length;
-                            for (var i = 0; i < length_21; i++) {
+                            var length_19 = children.length;
+                            for (var i = 0; i < length_19; i++) {
                                 var child = children[i];
                                 if (child.nodeType == 1) {
                                     values.push(this.createFuncForNode(child));
@@ -8838,8 +8619,8 @@ var eui;
                 if (this.declarations) {
                     var children = this.declarations.children;
                     if (children && children.length > 0) {
-                        var length_22 = children.length;
-                        for (var i = 0; i < length_22; i++) {
+                        var length_20 = children.length;
+                        for (var i = 0; i < length_20; i++) {
                             var decl = children[i];
                             if (decl.nodeType != 1) {
                                 continue;
@@ -8974,8 +8755,8 @@ var eui;
                 var children = root.children;
                 var item;
                 if (children) {
-                    var length_23 = children.length;
-                    for (var i = 0; i < length_23; i++) {
+                    var length_21 = children.length;
+                    for (var i = 0; i < length_21; i++) {
                         item = children[i];
                         if (item.nodeType == 1 &&
                             item.localName == "states") {
@@ -8998,8 +8779,8 @@ var eui;
                 }
                 if (statesValue) {
                     var states = statesValue.split(",");
-                    var length_24 = states.length;
-                    for (var i = 0; i < length_24; i++) {
+                    var length_22 = states.length;
+                    for (var i = 0; i < length_22; i++) {
                         var stateName = states[i].trim();
                         if (!stateName) {
                             continue;
@@ -14340,8 +14121,8 @@ var eui;
              */
             set: function (value) {
                 if (value) {
-                    var length_25 = value.length;
-                    for (var i = 0; i < length_25; i++) {
+                    var length_23 = value.length;
+                    for (var i = 0; i < length_23; i++) {
                         this.addChild(value[i]);
                     }
                 }
@@ -15633,8 +15414,8 @@ var eui;
             if (instance) {
                 var foundInstance = false;
                 var buttons = this.radioButtons;
-                var length_26 = buttons.length;
-                for (var i = 0; i < length_26; i++) {
+                var length_24 = buttons.length;
+                for (var i = 0; i < length_24; i++) {
                     var rb = buttons[i];
                     if (foundInstance) {
                         rb.$indexNumber = rb.$indexNumber - 1;
@@ -15649,7 +15430,7 @@ var eui;
                         this.radioButtons.splice(i, 1);
                         foundInstance = true;
                         i--;
-                        length_26--;
+                        length_24--;
                     }
                 }
             }
@@ -19748,8 +19529,8 @@ var eui;
                 var skinMap = this.skinMap;
                 var skins = data.skins;
                 var keys = Object.keys(skins);
-                var length_27 = keys.length;
-                for (var i = 0; i < length_27; i++) {
+                var length_25 = keys.length;
+                for (var i = 0; i < length_25; i++) {
                     var key = keys[i];
                     if (!skinMap[key]) {
                         this.mapSkin(key, skins[key]);
@@ -21204,8 +20985,8 @@ var eui;
                 }
                 if (this.codeBlock) {
                     var lines = this.codeBlock.toCode().split("\n");
-                    var length_28 = lines.length;
-                    for (var i = 0; i < length_28; i++) {
+                    var length_26 = lines.length;
+                    for (var i = 0; i < length_26; i++) {
                         var line = lines[i];
                         returnStr += codeIndent + line + "\n";
                     }
@@ -21313,8 +21094,8 @@ var eui;
                         returnStr += ",\n";
                     var item = overrides[index];
                     var codes = item.toCode().split("\n");
-                    var length_29 = codes.length;
-                    for (var i = 0; i < length_29; i++) {
+                    var length_27 = codes.length;
+                    for (var i = 0; i < length_27; i++) {
                         var code = codes[i];
                         codes[i] = indentStr + indentStr + code;
                     }
@@ -21665,8 +21446,8 @@ var EXML;
             }
             var list = callBackMap[url];
             delete callBackMap[url];
-            var length_30 = list ? list.length : 0;
-            for (var i = 0; i < length_30; i++) {
+            var length_28 = list ? list.length : 0;
+            for (var i = 0; i < length_28; i++) {
                 var arr = list[i];
                 if (arr[0] && arr[1])
                     arr[0].call(arr[1], clazz, url);
@@ -22660,8 +22441,8 @@ var eui;
                 if (totalPercentWidth > 0) {
                     this.flexChildrenProportionally(targetWidth, widthToDistribute, totalPercentWidth, childInfoArray);
                     var roundOff_1 = 0;
-                    var length_31 = childInfoArray.length;
-                    for (i = 0; i < length_31; i++) {
+                    var length_29 = childInfoArray.length;
+                    for (i = 0; i < length_29; i++) {
                         childInfo = childInfoArray[i];
                         var childSize = Math.round(childInfo.size + roundOff_1);
                         roundOff_1 += childInfo.size - childSize;
@@ -24734,8 +24515,8 @@ var eui;
                 if (totalPercentHeight > 0) {
                     this.flexChildrenProportionally(targetHeight, heightToDistribute, totalPercentHeight, childInfoArray);
                     var roundOff_2 = 0;
-                    var length_32 = childInfoArray.length;
-                    for (i = 0; i < length_32; i++) {
+                    var length_30 = childInfoArray.length;
+                    for (i = 0; i < length_30; i++) {
                         childInfo = childInfoArray[i];
                         var childSize = Math.round(childInfo.size + roundOff_2);
                         roundOff_2 += childInfo.size - childSize;

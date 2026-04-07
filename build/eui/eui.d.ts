@@ -91,21 +91,26 @@ declare namespace eui.sys {
         private targetLevel;
         /**
          * @private
-         */
-        private invalidatePropertiesFlag;
-        /**
-         * @private
-         */
-        private invalidateClientPropertiesFlag;
-        /**
-         * @private
          * 是否已经添加了tick监听
          */
         private tickAttached;
         /**
          * @private
+         * 是否已经添加了事件监听
          */
-        private invalidatePropertiesQueue;
+        private listenersAttached;
+        /**
+         * @private
+         */
+        private propertiesQueue;
+        /**
+         * @private
+         */
+        private sizeQueue;
+        /**
+         * @private
+         */
+        private displayListQueue;
         /**
          * @private
          * 标记组件属性失效
@@ -113,54 +118,14 @@ declare namespace eui.sys {
         invalidateProperties(client: UIComponent): void;
         /**
          * @private
-         * 验证失效的属性
-         */
-        private validateProperties();
-        /**
-         * @private
-         */
-        private invalidateSizeFlag;
-        /**
-         * @private
-         */
-        private invalidateClientSizeFlag;
-        /**
-         * @private
-         */
-        private invalidateSizeQueue;
-        /**
-         * @private
          * 标记需要重新测量尺寸
          */
         invalidateSize(client: UIComponent): void;
         /**
          * @private
-         * 测量尺寸
-         */
-        private validateSize();
-        /**
-         * @private
-         */
-        private invalidateDisplayListFlag;
-        /**
-         * @private
-         */
-        private invalidateDisplayListQueue;
-        /**
-         * @private
          * 标记需要重新布局
          */
         invalidateDisplayList(client: UIComponent): void;
-        /**
-         * @private
-         * 重新布局
-         */
-        private validateDisplayList();
-        /**
-         * @private
-         * 是否已经添加了事件监听
-         */
-        private listenersAttached;
         /**
          * @private
          * 添加事件监听
@@ -173,7 +138,6 @@ declare namespace eui.sys {
         private onTick(timeStamp);
         /**
          * @private
-         *
          */
         private doPhasedInstantiation();
         /**
@@ -182,6 +146,17 @@ declare namespace eui.sys {
          * @param target 要立即应用属性的组件
          */
         validateClient(target: UIComponent): void;
+        /**
+         * @private
+         * Remove and return an item from the queue that belongs to target's subtree.
+         * When maxLevel is true, returns the deepest matching item; otherwise the shallowest.
+         */
+        private removeSubtreeItem(queue, target, maxLevel);
+        /**
+         * @private
+         * Check whether the queue contains any item that belongs to target's subtree.
+         */
+        private hasSubtreeItems(queue, target);
     }
 }
 declare namespace eui {
@@ -954,6 +929,7 @@ declare namespace eui.sys {
         protected updateDisplayList(unscaledWidth: number, unscaledHeight: number): void;
         $super: any;
         $UIComponent: Object;
+        $dirtyFlags: number;
         $includeInLayout: boolean;
         /**
          * @private

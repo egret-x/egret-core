@@ -587,27 +587,577 @@ var egret;
         /**
          * @private
          */
-        function getOption(key) {
-            if (window.location) {
-                var search = location.search;
-                if (search == "") {
-                    return "";
+        var WebExternalInterface = (function () {
+            function WebExternalInterface() {
+            }
+            /**
+             * @private
+             * @param functionName
+             * @param value
+             */
+            WebExternalInterface.call = function (functionName, value) {
+            };
+            /**
+             * @private
+             * @param functionName
+             * @param listener
+             */
+            WebExternalInterface.addCallback = function (functionName, listener) {
+            };
+            return WebExternalInterface;
+        }());
+        web.WebExternalInterface = WebExternalInterface;
+        __reflect(WebExternalInterface.prototype, "egret.web.WebExternalInterface", ["egret.ExternalInterface"]);
+        var ua = navigator.userAgent.toLowerCase();
+        if (ua.indexOf("egretnative") < 0) {
+            egret.ExternalInterface = WebExternalInterface;
+        }
+    })(web = egret.web || (egret.web = {}));
+})(egret || (egret = {}));
+(function (egret) {
+    var web;
+    (function (web) {
+        var callBackDic = {};
+        /**
+         * @private
+         */
+        var NativeExternalInterface = (function () {
+            function NativeExternalInterface() {
+            }
+            NativeExternalInterface.call = function (functionName, value) {
+                var data = {};
+                data.functionName = functionName;
+                data.value = value;
+                egret_native.sendInfoToPlugin(JSON.stringify(data));
+            };
+            NativeExternalInterface.addCallback = function (functionName, listener) {
+                callBackDic[functionName] = listener;
+            };
+            return NativeExternalInterface;
+        }());
+        web.NativeExternalInterface = NativeExternalInterface;
+        __reflect(NativeExternalInterface.prototype, "egret.web.NativeExternalInterface", ["egret.ExternalInterface"]);
+        /**
+         * @private
+         * @param info
+         */
+        function onReceivedPluginInfo(info) {
+            var data = JSON.parse(info);
+            var functionName = data.functionName;
+            var listener = callBackDic[functionName];
+            if (listener) {
+                var value = data.value;
+                listener.call(null, value);
+            }
+            else {
+                egret.$warn(1050, functionName);
+            }
+        }
+        var ua = navigator.userAgent.toLowerCase();
+        if (ua.indexOf("egretnative") >= 0) {
+            egret.ExternalInterface = NativeExternalInterface;
+            egret_native.receivedPluginInfo = onReceivedPluginInfo;
+        }
+    })(web = egret.web || (egret.web = {}));
+})(egret || (egret = {}));
+(function (egret) {
+    var web;
+    (function (web) {
+        var callBackDic = {};
+        /**
+         * @private
+         */
+        var WebViewExternalInterface = (function () {
+            function WebViewExternalInterface() {
+            }
+            WebViewExternalInterface.call = function (functionName, value) {
+                __global.ExternalInterface.call(functionName, value);
+            };
+            WebViewExternalInterface.addCallback = function (functionName, listener) {
+                callBackDic[functionName] = listener;
+            };
+            WebViewExternalInterface.invokeCallback = function (functionName, value) {
+                var listener = callBackDic[functionName];
+                if (listener) {
+                    listener.call(null, value);
                 }
-                search = search.slice(1);
-                var searchArr = search.split("&");
-                var length_1 = searchArr.length;
-                for (var i = 0; i < length_1; i++) {
-                    var str = searchArr[i];
-                    var arr = str.split("=");
-                    if (arr[0] == key) {
-                        return arr[1];
-                    }
+                else {
+                    egret.$warn(1050, functionName);
+                }
+            };
+            return WebViewExternalInterface;
+        }());
+        web.WebViewExternalInterface = WebViewExternalInterface;
+        __reflect(WebViewExternalInterface.prototype, "egret.web.WebViewExternalInterface", ["egret.ExternalInterface"]);
+        var ua = navigator.userAgent.toLowerCase();
+        if (ua.indexOf("egretwebview") >= 0) {
+            egret.ExternalInterface = WebViewExternalInterface;
+        }
+    })(web = egret.web || (egret.web = {}));
+})(egret || (egret = {}));
+//////////////////////////////////////////////////////////////////////////////////////
+//
+//  Copyright (c) 2014-present, Egret Technology.
+//  All rights reserved.
+//  Redistribution and use in source and binary forms, with or without
+//  modification, are permitted provided that the following conditions are met:
+//
+//     * Redistributions of source code must retain the above copyright
+//       notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above copyright
+//       notice, this list of conditions and the following disclaimer in the
+//       documentation and/or other materials provided with the distribution.
+//     * Neither the name of the Egret nor the
+//       names of its contributors may be used to endorse or promote products
+//       derived from this software without specific prior written permission.
+//
+//  THIS SOFTWARE IS PROVIDED BY EGRET AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
+//  OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+//  OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+//  IN NO EVENT SHALL EGRET AND CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+//  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+//  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;LOSS OF USE, DATA,
+//  OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+//  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+//  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//////////////////////////////////////////////////////////////////////////////////////
+var egret;
+(function (egret) {
+    var localStorage;
+    (function (localStorage) {
+        var web;
+        (function (web) {
+            /**
+             * @private
+             *
+             * @param key
+             * @returns
+             */
+            function getItem(key) {
+                return window.localStorage.getItem(key);
+            }
+            /**
+             * @private
+             *
+             * @param key
+             * @param value
+             * @returns
+             */
+            function setItem(key, value) {
+                try {
+                    window.localStorage.setItem(key, value);
+                    return true;
+                }
+                catch (e) {
+                    egret.$warn(1047, key, value);
+                    return false;
                 }
             }
-            return "";
-        }
-        web.getOption = getOption;
-        egret.getOption = getOption;
+            /**
+             * @private
+             *
+             * @param key
+             */
+            function removeItem(key) {
+                window.localStorage.removeItem(key);
+            }
+            /**
+             * @private
+             *
+             */
+            function clear() {
+                window.localStorage.clear();
+            }
+            localStorage.getItem = getItem;
+            localStorage.setItem = setItem;
+            localStorage.removeItem = removeItem;
+            localStorage.clear = clear;
+        })(web = localStorage.web || (localStorage.web = {}));
+    })(localStorage = egret.localStorage || (egret.localStorage = {}));
+})(egret || (egret = {}));
+//////////////////////////////////////////////////////////////////////////////////////
+//
+//  Copyright (c) 2014-present, Egret Technology.
+//  All rights reserved.
+//  Redistribution and use in source and binary forms, with or without
+//  modification, are permitted provided that the following conditions are met:
+//
+//     * Redistributions of source code must retain the above copyright
+//       notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above copyright
+//       notice, this list of conditions and the following disclaimer in the
+//       documentation and/or other materials provided with the distribution.
+//     * Neither the name of the Egret nor the
+//       names of its contributors may be used to endorse or promote products
+//       derived from this software without specific prior written permission.
+//
+//  THIS SOFTWARE IS PROVIDED BY EGRET AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
+//  OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+//  OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+//  IN NO EVENT SHALL EGRET AND CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+//  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+//  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;LOSS OF USE, DATA,
+//  OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+//  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+//  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//////////////////////////////////////////////////////////////////////////////////////
+var egret;
+(function (egret) {
+    var web;
+    (function (web) {
+        /**
+         * @private
+         * @inheritDoc
+         */
+        var HtmlSound = (function (_super) {
+            __extends(HtmlSound, _super);
+            /**
+             * @private
+             * @inheritDoc
+             */
+            function HtmlSound() {
+                var _this = _super.call(this) || this;
+                /**
+                 * @private
+                 */
+                _this.loaded = false;
+                return _this;
+            }
+            Object.defineProperty(HtmlSound.prototype, "length", {
+                get: function () {
+                    if (this.originAudio) {
+                        return this.originAudio.duration;
+                    }
+                    throw new Error("sound not loaded!");
+                    //return 0;
+                },
+                enumerable: true,
+                configurable: true
+            });
+            /**
+             * @inheritDoc
+             */
+            HtmlSound.prototype.load = function (url) {
+                var self = this;
+                this.url = url;
+                if (true && !url) {
+                    egret.$error(3002);
+                }
+                var audio = new Audio(url);
+                audio.addEventListener("canplaythrough", onAudioLoaded);
+                audio.addEventListener("error", onAudioError);
+                var ua = navigator.userAgent.toLowerCase();
+                if (ua.indexOf("firefox") >= 0) {
+                    audio.autoplay = !0;
+                    audio.muted = true;
+                }
+                //edge and ie11
+                var ie = ua.indexOf("edge") >= 0 || ua.indexOf("trident") >= 0;
+                if (ie) {
+                    document.body.appendChild(audio);
+                }
+                audio.load();
+                HtmlSound.loadingSoundMap[url] = audio;
+                this.originAudio = audio;
+                if (HtmlSound.clearAudios[this.url]) {
+                    delete HtmlSound.clearAudios[this.url];
+                }
+                function onAudioLoaded() {
+                    delete HtmlSound.loadingSoundMap[url];
+                    HtmlSound.$recycle(self.url, audio);
+                    removeListeners();
+                    if (ua.indexOf("firefox") >= 0) {
+                        audio.pause();
+                        audio.muted = false;
+                    }
+                    if (ie) {
+                        document.body.appendChild(audio);
+                    }
+                    self.loaded = true;
+                    self.dispatchEventWith(egret.Event.COMPLETE);
+                }
+                function onAudioError() {
+                    removeListeners();
+                    self.dispatchEventWith(egret.IOErrorEvent.IO_ERROR);
+                }
+                function removeListeners() {
+                    audio.removeEventListener("canplaythrough", onAudioLoaded);
+                    audio.removeEventListener("error", onAudioError);
+                    if (ie) {
+                        document.body.removeChild(audio);
+                    }
+                }
+            };
+            /**
+             * @inheritDoc
+             */
+            HtmlSound.prototype.play = function (startTime, loops) {
+                startTime = +startTime || 0;
+                loops = +loops || 0;
+                if (true && this.loaded == false) {
+                    egret.$error(1049);
+                }
+                var audio = HtmlSound.$pop(this.url);
+                if (audio == null) {
+                    audio = this.originAudio.cloneNode();
+                }
+                else {
+                    //audio.load();
+                }
+                audio.autoplay = true;
+                var channel = new web.HtmlSoundChannel(audio);
+                channel.$url = this.url;
+                channel.$loops = loops;
+                channel.$startTime = startTime;
+                channel.$play();
+                egret.sys.$pushSoundChannel(channel);
+                return channel;
+            };
+            /**
+             * @inheritDoc
+             */
+            HtmlSound.prototype.close = function () {
+                if (this.loaded && this.originAudio) {
+                    this.originAudio.src = "";
+                }
+                if (this.originAudio)
+                    this.originAudio = null;
+                HtmlSound.$clear(this.url);
+                this.loaded = false;
+            };
+            HtmlSound.$clear = function (url) {
+                HtmlSound.clearAudios[url] = true;
+                var array = HtmlSound.audios[url];
+                if (array) {
+                    array.length = 0;
+                }
+            };
+            HtmlSound.$pop = function (url) {
+                var array = HtmlSound.audios[url];
+                if (array && array.length > 0) {
+                    return array.pop();
+                }
+                return null;
+            };
+            HtmlSound.$recycle = function (url, audio) {
+                if (HtmlSound.clearAudios[url]) {
+                    return;
+                }
+                var array = HtmlSound.audios[url];
+                if (HtmlSound.audios[url] == null) {
+                    array = HtmlSound.audios[url] = [];
+                }
+                array.push(audio);
+            };
+            /**
+             * Background music
+             * @version Egret 2.4
+             * @platform Web,Native
+             * @language en_US
+             */
+            /**
+             * 背景音乐
+             * @version Egret 2.4
+             * @platform Web,Native
+             * @language zh_CN
+             */
+            HtmlSound.MUSIC = "music";
+            /**
+             * EFFECT
+             * @version Egret 2.4
+             * @platform Web,Native
+             * @language en_US
+             */
+            /**
+             * 音效
+             * @version Egret 2.4
+             * @platform Web,Native
+             * @language zh_CN
+             */
+            HtmlSound.EFFECT = "effect";
+            HtmlSound.loadingSoundMap = {};
+            /**
+             * @private
+             */
+            HtmlSound.audios = {};
+            HtmlSound.clearAudios = {};
+            return HtmlSound;
+        }(egret.EventDispatcher));
+        web.HtmlSound = HtmlSound;
+        __reflect(HtmlSound.prototype, "egret.web.HtmlSound", ["egret.Sound"]);
+    })(web = egret.web || (egret.web = {}));
+})(egret || (egret = {}));
+//////////////////////////////////////////////////////////////////////////////////////
+//
+//  Copyright (c) 2014-present, Egret Technology.
+//  All rights reserved.
+//  Redistribution and use in source and binary forms, with or without
+//  modification, are permitted provided that the following conditions are met:
+//
+//     * Redistributions of source code must retain the above copyright
+//       notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above copyright
+//       notice, this list of conditions and the following disclaimer in the
+//       documentation and/or other materials provided with the distribution.
+//     * Neither the name of the Egret nor the
+//       names of its contributors may be used to endorse or promote products
+//       derived from this software without specific prior written permission.
+//
+//  THIS SOFTWARE IS PROVIDED BY EGRET AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
+//  OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+//  OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+//  IN NO EVENT SHALL EGRET AND CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+//  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+//  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;LOSS OF USE, DATA,
+//  OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+//  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+//  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//////////////////////////////////////////////////////////////////////////////////////
+var egret;
+(function (egret) {
+    var web;
+    (function (web) {
+        /**
+         * @private
+         * @inheritDoc
+         */
+        var HtmlSoundChannel = (function (_super) {
+            __extends(HtmlSoundChannel, _super);
+            /**
+             * @private
+             */
+            function HtmlSoundChannel(audio) {
+                var _this = _super.call(this) || this;
+                /**
+                 * @private
+                 */
+                _this.$startTime = 0;
+                /**
+                 * @private
+                 */
+                _this.audio = null;
+                //声音是否已经播放完成
+                _this.isStopped = false;
+                _this.canPlay = function () {
+                    _this.audio.removeEventListener("canplay", _this.canPlay);
+                    try {
+                        _this.audio.currentTime = _this.$startTime;
+                    }
+                    catch (e) {
+                    }
+                    finally {
+                        _this.audio.play();
+                    }
+                };
+                /**
+                 * @private
+                 */
+                _this.onPlayEnd = function () {
+                    if (_this.$loops == 1) {
+                        _this.stop();
+                        _this.dispatchEventWith(egret.Event.SOUND_COMPLETE);
+                        return;
+                    }
+                    if (_this.$loops > 0) {
+                        _this.$loops--;
+                    }
+                    /////////////
+                    //this.audio.load();
+                    _this.$play();
+                };
+                /**
+                 * @private
+                 */
+                _this._volume = 1;
+                audio.addEventListener("ended", _this.onPlayEnd);
+                _this.audio = audio;
+                return _this;
+            }
+            HtmlSoundChannel.prototype.$play = function () {
+                if (this.isStopped) {
+                    egret.$error(1036);
+                    return;
+                }
+                try {
+                    //this.audio.pause();
+                    this.audio.volume = this._volume;
+                    this.audio.currentTime = this.$startTime;
+                }
+                catch (e) {
+                    this.audio.addEventListener("canplay", this.canPlay);
+                    return;
+                }
+                this.audio.play();
+            };
+            /**
+             * @private
+             * @inheritDoc
+             */
+            HtmlSoundChannel.prototype.stop = function () {
+                if (!this.audio)
+                    return;
+                if (!this.isStopped) {
+                    egret.sys.$popSoundChannel(this);
+                }
+                this.isStopped = true;
+                var audio = this.audio;
+                audio.removeEventListener("ended", this.onPlayEnd);
+                audio.removeEventListener("canplay", this.canPlay);
+                audio.volume = 0;
+                this._volume = 0;
+                this.audio = null;
+                var url = this.$url;
+                //延迟一定时间再停止，规避chrome报错
+                audio.pause();
+                web.HtmlSound.$recycle(url, audio);
+            };
+            Object.defineProperty(HtmlSoundChannel.prototype, "volume", {
+                /**
+                 * @private
+                 * @inheritDoc
+                 */
+                get: function () {
+                    return this._volume;
+                },
+                /**
+                 * @inheritDoc
+                 */
+                set: function (value) {
+                    if (this.isStopped) {
+                        egret.$error(1036);
+                        return;
+                    }
+                    this._volume = value;
+                    if (!this.audio)
+                        return;
+                    this.audio.volume = value;
+                },
+                enumerable: true,
+                configurable: true
+            });
+            Object.defineProperty(HtmlSoundChannel.prototype, "position", {
+                /**
+                 * @private
+                 * @inheritDoc
+                 */
+                get: function () {
+                    if (!this.audio)
+                        return 0;
+                    return this.audio.currentTime;
+                },
+                enumerable: true,
+                configurable: true
+            });
+            return HtmlSoundChannel;
+        }(egret.EventDispatcher));
+        web.HtmlSoundChannel = HtmlSoundChannel;
+        __reflect(HtmlSoundChannel.prototype, "egret.web.HtmlSoundChannel", ["egret.SoundChannel", "egret.IEventDispatcher"]);
     })(web = egret.web || (egret.web = {}));
 })(egret || (egret = {}));
 //////////////////////////////////////////////////////////////////////////////////////
@@ -4069,8 +4619,8 @@ var egret;
                     egret.sys.screenAdapter = new egret.sys.DefaultScreenAdapter();
                 }
                 var list = document.querySelectorAll(".egret-player");
-                var length_2 = list.length;
-                for (var i = 0; i < length_2; i++) {
+                var length_1 = list.length;
+                for (var i = 0; i < length_1; i++) {
                     var container = list[i];
                     var player = new web.WebPlayer(container, options);
                     container["egret-player"] = player;
@@ -4198,6 +4748,9 @@ var egret;
                     }
                     else if (ua.indexOf("android") != -1 && ua.indexOf("linux") != -1) {
                         capabilities["os" + ""] = "Android";
+                    }
+                    else if (ua.indexOf("harmony") != -1) {
+                        capabilities["os" + ""] = "ohos";
                     }
                     else if (ua.indexOf("windows") != -1) {
                         capabilities["os" + ""] = "Windows Phone";
@@ -4542,57 +5095,33 @@ var egret;
 //////////////////////////////////////////////////////////////////////////////////////
 var egret;
 (function (egret) {
-    var localStorage;
-    (function (localStorage) {
-        var web;
-        (function (web) {
-            /**
-             * @private
-             *
-             * @param key
-             * @returns
-             */
-            function getItem(key) {
-                return window.localStorage.getItem(key);
-            }
-            /**
-             * @private
-             *
-             * @param key
-             * @param value
-             * @returns
-             */
-            function setItem(key, value) {
-                try {
-                    window.localStorage.setItem(key, value);
-                    return true;
+    var web;
+    (function (web) {
+        /**
+         * @private
+         */
+        function getOption(key) {
+            if (window.location) {
+                var search = location.search;
+                if (search == "") {
+                    return "";
                 }
-                catch (e) {
-                    egret.$warn(1047, key, value);
-                    return false;
+                search = search.slice(1);
+                var searchArr = search.split("&");
+                var length_2 = searchArr.length;
+                for (var i = 0; i < length_2; i++) {
+                    var str = searchArr[i];
+                    var arr = str.split("=");
+                    if (arr[0] == key) {
+                        return arr[1];
+                    }
                 }
             }
-            /**
-             * @private
-             *
-             * @param key
-             */
-            function removeItem(key) {
-                window.localStorage.removeItem(key);
-            }
-            /**
-             * @private
-             *
-             */
-            function clear() {
-                window.localStorage.clear();
-            }
-            localStorage.getItem = getItem;
-            localStorage.setItem = setItem;
-            localStorage.removeItem = removeItem;
-            localStorage.clear = clear;
-        })(web = localStorage.web || (localStorage.web = {}));
-    })(localStorage = egret.localStorage || (egret.localStorage = {}));
+            return "";
+        }
+        web.getOption = getOption;
+        egret.getOption = getOption;
+    })(web = egret.web || (egret.web = {}));
 })(egret || (egret = {}));
 //////////////////////////////////////////////////////////////////////////////////////
 //
@@ -5237,363 +5766,6 @@ var egret;
 (function (egret) {
     var web;
     (function (web) {
-        /**
-         * @private
-         */
-        var WebExternalInterface = (function () {
-            function WebExternalInterface() {
-            }
-            /**
-             * @private
-             * @param functionName
-             * @param value
-             */
-            WebExternalInterface.call = function (functionName, value) {
-            };
-            /**
-             * @private
-             * @param functionName
-             * @param listener
-             */
-            WebExternalInterface.addCallback = function (functionName, listener) {
-            };
-            return WebExternalInterface;
-        }());
-        web.WebExternalInterface = WebExternalInterface;
-        __reflect(WebExternalInterface.prototype, "egret.web.WebExternalInterface", ["egret.ExternalInterface"]);
-        var ua = navigator.userAgent.toLowerCase();
-        if (ua.indexOf("egretnative") < 0) {
-            egret.ExternalInterface = WebExternalInterface;
-        }
-    })(web = egret.web || (egret.web = {}));
-})(egret || (egret = {}));
-(function (egret) {
-    var web;
-    (function (web) {
-        var callBackDic = {};
-        /**
-         * @private
-         */
-        var NativeExternalInterface = (function () {
-            function NativeExternalInterface() {
-            }
-            NativeExternalInterface.call = function (functionName, value) {
-                var data = {};
-                data.functionName = functionName;
-                data.value = value;
-                egret_native.sendInfoToPlugin(JSON.stringify(data));
-            };
-            NativeExternalInterface.addCallback = function (functionName, listener) {
-                callBackDic[functionName] = listener;
-            };
-            return NativeExternalInterface;
-        }());
-        web.NativeExternalInterface = NativeExternalInterface;
-        __reflect(NativeExternalInterface.prototype, "egret.web.NativeExternalInterface", ["egret.ExternalInterface"]);
-        /**
-         * @private
-         * @param info
-         */
-        function onReceivedPluginInfo(info) {
-            var data = JSON.parse(info);
-            var functionName = data.functionName;
-            var listener = callBackDic[functionName];
-            if (listener) {
-                var value = data.value;
-                listener.call(null, value);
-            }
-            else {
-                egret.$warn(1050, functionName);
-            }
-        }
-        var ua = navigator.userAgent.toLowerCase();
-        if (ua.indexOf("egretnative") >= 0) {
-            egret.ExternalInterface = NativeExternalInterface;
-            egret_native.receivedPluginInfo = onReceivedPluginInfo;
-        }
-    })(web = egret.web || (egret.web = {}));
-})(egret || (egret = {}));
-(function (egret) {
-    var web;
-    (function (web) {
-        var callBackDic = {};
-        /**
-         * @private
-         */
-        var WebViewExternalInterface = (function () {
-            function WebViewExternalInterface() {
-            }
-            WebViewExternalInterface.call = function (functionName, value) {
-                __global.ExternalInterface.call(functionName, value);
-            };
-            WebViewExternalInterface.addCallback = function (functionName, listener) {
-                callBackDic[functionName] = listener;
-            };
-            WebViewExternalInterface.invokeCallback = function (functionName, value) {
-                var listener = callBackDic[functionName];
-                if (listener) {
-                    listener.call(null, value);
-                }
-                else {
-                    egret.$warn(1050, functionName);
-                }
-            };
-            return WebViewExternalInterface;
-        }());
-        web.WebViewExternalInterface = WebViewExternalInterface;
-        __reflect(WebViewExternalInterface.prototype, "egret.web.WebViewExternalInterface", ["egret.ExternalInterface"]);
-        var ua = navigator.userAgent.toLowerCase();
-        if (ua.indexOf("egretwebview") >= 0) {
-            egret.ExternalInterface = WebViewExternalInterface;
-        }
-    })(web = egret.web || (egret.web = {}));
-})(egret || (egret = {}));
-//////////////////////////////////////////////////////////////////////////////////////
-//
-//  Copyright (c) 2014-present, Egret Technology.
-//  All rights reserved.
-//  Redistribution and use in source and binary forms, with or without
-//  modification, are permitted provided that the following conditions are met:
-//
-//     * Redistributions of source code must retain the above copyright
-//       notice, this list of conditions and the following disclaimer.
-//     * Redistributions in binary form must reproduce the above copyright
-//       notice, this list of conditions and the following disclaimer in the
-//       documentation and/or other materials provided with the distribution.
-//     * Neither the name of the Egret nor the
-//       names of its contributors may be used to endorse or promote products
-//       derived from this software without specific prior written permission.
-//
-//  THIS SOFTWARE IS PROVIDED BY EGRET AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
-//  OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
-//  OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-//  IN NO EVENT SHALL EGRET AND CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-//  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-//  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;LOSS OF USE, DATA,
-//  OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-//  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
-//  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-//////////////////////////////////////////////////////////////////////////////////////
-var egret;
-(function (egret) {
-    var web;
-    (function (web) {
-        /**
-         * @private
-         * @inheritDoc
-         */
-        var HtmlSound = (function (_super) {
-            __extends(HtmlSound, _super);
-            /**
-             * @private
-             * @inheritDoc
-             */
-            function HtmlSound() {
-                var _this = _super.call(this) || this;
-                /**
-                 * @private
-                 */
-                _this.loaded = false;
-                return _this;
-            }
-            Object.defineProperty(HtmlSound.prototype, "length", {
-                get: function () {
-                    if (this.originAudio) {
-                        return this.originAudio.duration;
-                    }
-                    throw new Error("sound not loaded!");
-                    //return 0;
-                },
-                enumerable: true,
-                configurable: true
-            });
-            /**
-             * @inheritDoc
-             */
-            HtmlSound.prototype.load = function (url) {
-                var self = this;
-                this.url = url;
-                if (true && !url) {
-                    egret.$error(3002);
-                }
-                var audio = new Audio(url);
-                audio.addEventListener("canplaythrough", onAudioLoaded);
-                audio.addEventListener("error", onAudioError);
-                var ua = navigator.userAgent.toLowerCase();
-                if (ua.indexOf("firefox") >= 0) {
-                    audio.autoplay = !0;
-                    audio.muted = true;
-                }
-                //edge and ie11
-                var ie = ua.indexOf("edge") >= 0 || ua.indexOf("trident") >= 0;
-                if (ie) {
-                    document.body.appendChild(audio);
-                }
-                audio.load();
-                HtmlSound.loadingSoundMap[url] = audio;
-                this.originAudio = audio;
-                if (HtmlSound.clearAudios[this.url]) {
-                    delete HtmlSound.clearAudios[this.url];
-                }
-                function onAudioLoaded() {
-                    delete HtmlSound.loadingSoundMap[url];
-                    HtmlSound.$recycle(self.url, audio);
-                    removeListeners();
-                    if (ua.indexOf("firefox") >= 0) {
-                        audio.pause();
-                        audio.muted = false;
-                    }
-                    if (ie) {
-                        document.body.appendChild(audio);
-                    }
-                    self.loaded = true;
-                    self.dispatchEventWith(egret.Event.COMPLETE);
-                }
-                function onAudioError() {
-                    removeListeners();
-                    self.dispatchEventWith(egret.IOErrorEvent.IO_ERROR);
-                }
-                function removeListeners() {
-                    audio.removeEventListener("canplaythrough", onAudioLoaded);
-                    audio.removeEventListener("error", onAudioError);
-                    if (ie) {
-                        document.body.removeChild(audio);
-                    }
-                }
-            };
-            /**
-             * @inheritDoc
-             */
-            HtmlSound.prototype.play = function (startTime, loops) {
-                startTime = +startTime || 0;
-                loops = +loops || 0;
-                if (true && this.loaded == false) {
-                    egret.$error(1049);
-                }
-                var audio = HtmlSound.$pop(this.url);
-                if (audio == null) {
-                    audio = this.originAudio.cloneNode();
-                }
-                else {
-                    //audio.load();
-                }
-                audio.autoplay = true;
-                var channel = new web.HtmlSoundChannel(audio);
-                channel.$url = this.url;
-                channel.$loops = loops;
-                channel.$startTime = startTime;
-                channel.$play();
-                egret.sys.$pushSoundChannel(channel);
-                return channel;
-            };
-            /**
-             * @inheritDoc
-             */
-            HtmlSound.prototype.close = function () {
-                if (this.loaded && this.originAudio) {
-                    this.originAudio.src = "";
-                }
-                if (this.originAudio)
-                    this.originAudio = null;
-                HtmlSound.$clear(this.url);
-                this.loaded = false;
-            };
-            HtmlSound.$clear = function (url) {
-                HtmlSound.clearAudios[url] = true;
-                var array = HtmlSound.audios[url];
-                if (array) {
-                    array.length = 0;
-                }
-            };
-            HtmlSound.$pop = function (url) {
-                var array = HtmlSound.audios[url];
-                if (array && array.length > 0) {
-                    return array.pop();
-                }
-                return null;
-            };
-            HtmlSound.$recycle = function (url, audio) {
-                if (HtmlSound.clearAudios[url]) {
-                    return;
-                }
-                var array = HtmlSound.audios[url];
-                if (HtmlSound.audios[url] == null) {
-                    array = HtmlSound.audios[url] = [];
-                }
-                array.push(audio);
-            };
-            /**
-             * Background music
-             * @version Egret 2.4
-             * @platform Web,Native
-             * @language en_US
-             */
-            /**
-             * 背景音乐
-             * @version Egret 2.4
-             * @platform Web,Native
-             * @language zh_CN
-             */
-            HtmlSound.MUSIC = "music";
-            /**
-             * EFFECT
-             * @version Egret 2.4
-             * @platform Web,Native
-             * @language en_US
-             */
-            /**
-             * 音效
-             * @version Egret 2.4
-             * @platform Web,Native
-             * @language zh_CN
-             */
-            HtmlSound.EFFECT = "effect";
-            HtmlSound.loadingSoundMap = {};
-            /**
-             * @private
-             */
-            HtmlSound.audios = {};
-            HtmlSound.clearAudios = {};
-            return HtmlSound;
-        }(egret.EventDispatcher));
-        web.HtmlSound = HtmlSound;
-        __reflect(HtmlSound.prototype, "egret.web.HtmlSound", ["egret.Sound"]);
-    })(web = egret.web || (egret.web = {}));
-})(egret || (egret = {}));
-//////////////////////////////////////////////////////////////////////////////////////
-//
-//  Copyright (c) 2014-present, Egret Technology.
-//  All rights reserved.
-//  Redistribution and use in source and binary forms, with or without
-//  modification, are permitted provided that the following conditions are met:
-//
-//     * Redistributions of source code must retain the above copyright
-//       notice, this list of conditions and the following disclaimer.
-//     * Redistributions in binary form must reproduce the above copyright
-//       notice, this list of conditions and the following disclaimer in the
-//       documentation and/or other materials provided with the distribution.
-//     * Neither the name of the Egret nor the
-//       names of its contributors may be used to endorse or promote products
-//       derived from this software without specific prior written permission.
-//
-//  THIS SOFTWARE IS PROVIDED BY EGRET AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
-//  OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
-//  OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-//  IN NO EVENT SHALL EGRET AND CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-//  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-//  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;LOSS OF USE, DATA,
-//  OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-//  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
-//  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-//////////////////////////////////////////////////////////////////////////////////////
-var egret;
-(function (egret) {
-    var web;
-    (function (web) {
         if (true) {
             var logFuncs_1;
             function setLogLevel(logType) {
@@ -5908,177 +6080,6 @@ var egret;
         }());
         web.WebGLDrawCmdManager = WebGLDrawCmdManager;
         __reflect(WebGLDrawCmdManager.prototype, "egret.web.WebGLDrawCmdManager");
-    })(web = egret.web || (egret.web = {}));
-})(egret || (egret = {}));
-//////////////////////////////////////////////////////////////////////////////////////
-//
-//  Copyright (c) 2014-present, Egret Technology.
-//  All rights reserved.
-//  Redistribution and use in source and binary forms, with or without
-//  modification, are permitted provided that the following conditions are met:
-//
-//     * Redistributions of source code must retain the above copyright
-//       notice, this list of conditions and the following disclaimer.
-//     * Redistributions in binary form must reproduce the above copyright
-//       notice, this list of conditions and the following disclaimer in the
-//       documentation and/or other materials provided with the distribution.
-//     * Neither the name of the Egret nor the
-//       names of its contributors may be used to endorse or promote products
-//       derived from this software without specific prior written permission.
-//
-//  THIS SOFTWARE IS PROVIDED BY EGRET AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
-//  OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
-//  OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-//  IN NO EVENT SHALL EGRET AND CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-//  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-//  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;LOSS OF USE, DATA,
-//  OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-//  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
-//  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-//////////////////////////////////////////////////////////////////////////////////////
-var egret;
-(function (egret) {
-    var web;
-    (function (web) {
-        /**
-         * @private
-         * @inheritDoc
-         */
-        var HtmlSoundChannel = (function (_super) {
-            __extends(HtmlSoundChannel, _super);
-            /**
-             * @private
-             */
-            function HtmlSoundChannel(audio) {
-                var _this = _super.call(this) || this;
-                /**
-                 * @private
-                 */
-                _this.$startTime = 0;
-                /**
-                 * @private
-                 */
-                _this.audio = null;
-                //声音是否已经播放完成
-                _this.isStopped = false;
-                _this.canPlay = function () {
-                    _this.audio.removeEventListener("canplay", _this.canPlay);
-                    try {
-                        _this.audio.currentTime = _this.$startTime;
-                    }
-                    catch (e) {
-                    }
-                    finally {
-                        _this.audio.play();
-                    }
-                };
-                /**
-                 * @private
-                 */
-                _this.onPlayEnd = function () {
-                    if (_this.$loops == 1) {
-                        _this.stop();
-                        _this.dispatchEventWith(egret.Event.SOUND_COMPLETE);
-                        return;
-                    }
-                    if (_this.$loops > 0) {
-                        _this.$loops--;
-                    }
-                    /////////////
-                    //this.audio.load();
-                    _this.$play();
-                };
-                /**
-                 * @private
-                 */
-                _this._volume = 1;
-                audio.addEventListener("ended", _this.onPlayEnd);
-                _this.audio = audio;
-                return _this;
-            }
-            HtmlSoundChannel.prototype.$play = function () {
-                if (this.isStopped) {
-                    egret.$error(1036);
-                    return;
-                }
-                try {
-                    //this.audio.pause();
-                    this.audio.volume = this._volume;
-                    this.audio.currentTime = this.$startTime;
-                }
-                catch (e) {
-                    this.audio.addEventListener("canplay", this.canPlay);
-                    return;
-                }
-                this.audio.play();
-            };
-            /**
-             * @private
-             * @inheritDoc
-             */
-            HtmlSoundChannel.prototype.stop = function () {
-                if (!this.audio)
-                    return;
-                if (!this.isStopped) {
-                    egret.sys.$popSoundChannel(this);
-                }
-                this.isStopped = true;
-                var audio = this.audio;
-                audio.removeEventListener("ended", this.onPlayEnd);
-                audio.removeEventListener("canplay", this.canPlay);
-                audio.volume = 0;
-                this._volume = 0;
-                this.audio = null;
-                var url = this.$url;
-                //延迟一定时间再停止，规避chrome报错
-                window.setTimeout(function () {
-                    audio.pause();
-                    web.HtmlSound.$recycle(url, audio);
-                }, 200);
-            };
-            Object.defineProperty(HtmlSoundChannel.prototype, "volume", {
-                /**
-                 * @private
-                 * @inheritDoc
-                 */
-                get: function () {
-                    return this._volume;
-                },
-                /**
-                 * @inheritDoc
-                 */
-                set: function (value) {
-                    if (this.isStopped) {
-                        egret.$error(1036);
-                        return;
-                    }
-                    this._volume = value;
-                    if (!this.audio)
-                        return;
-                    this.audio.volume = value;
-                },
-                enumerable: true,
-                configurable: true
-            });
-            Object.defineProperty(HtmlSoundChannel.prototype, "position", {
-                /**
-                 * @private
-                 * @inheritDoc
-                 */
-                get: function () {
-                    if (!this.audio)
-                        return 0;
-                    return this.audio.currentTime;
-                },
-                enumerable: true,
-                configurable: true
-            });
-            return HtmlSoundChannel;
-        }(egret.EventDispatcher));
-        web.HtmlSoundChannel = HtmlSoundChannel;
-        __reflect(HtmlSoundChannel.prototype, "egret.web.HtmlSoundChannel", ["egret.SoundChannel", "egret.IEventDispatcher"]);
     })(web = egret.web || (egret.web = {}));
 })(egret || (egret = {}));
 //////////////////////////////////////////////////////////////////////////////////////
@@ -6499,6 +6500,10 @@ var egret;
                 if (this.pvrtc) {
                     this.pvrtc.name = 'WEBGL_compressed_texture_pvrtc';
                 }
+                this.astc = gl.getExtension('WEBGL_compressed_texture_astc') || gl.getExtension('WEBKIT_WEBGL_compressed_texture_astc');
+                if (this.pvrtc) {
+                    this.pvrtc.name = 'WEBGL_compressed_texture_astc';
+                }
                 //
                 this.etc1 = gl.getExtension('WEBGL_compressed_texture_etc1') || gl.getExtension('WEBKIT_WEBGL_compressed_texture_etc1');
                 if (this.etc1) {
@@ -6508,15 +6513,17 @@ var egret;
                 if (egret.Capabilities._supportedCompressedTexture) {
                     egret.Capabilities._supportedCompressedTexture = egret.Capabilities._supportedCompressedTexture || {};
                     egret.Capabilities._supportedCompressedTexture.pvrtc = !!this.pvrtc;
+                    egret.Capabilities._supportedCompressedTexture.astc = !!this.astc;
                     egret.Capabilities._supportedCompressedTexture.etc1 = !!this.etc1;
                 }
                 else {
                     egret.Capabilities['supportedCompressedTexture'] = egret.Capabilities._supportedCompressedTexture || {};
                     egret.Capabilities['supportedCompressedTexture'].pvrtc = !!this.pvrtc;
+                    egret.Capabilities['supportedCompressedTexture'].astc = !!this.astc;
                     egret.Capabilities['supportedCompressedTexture'].etc1 = !!this.etc1;
                 }
                 //
-                this._supportedCompressedTextureInfo = this._buildSupportedCompressedTextureInfo(/*this.context, compressedTextureExNames,*/ [this.etc1, this.pvrtc]);
+                this._supportedCompressedTextureInfo = this._buildSupportedCompressedTextureInfo(/*this.context, compressedTextureExNames,*/ [this.etc1, this.astc, this.pvrtc]);
             };
             WebGLRenderContext.prototype.handleContextLost = function () {
                 this.contextLost = true;

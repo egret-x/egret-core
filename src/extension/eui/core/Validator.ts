@@ -32,6 +32,89 @@ namespace eui.sys {
 
     /**
      * @private
+     * Single-array queue sorted by nestLevel on drain.
+     * Deduplication is handled upstream in UIComponent.$dirtyFlags, so no hash map is needed.
+     */
+    class FlatQueue {
+        public items: UIComponent[] = [];
+        public count: number = 0;
+
+        public enqueue(client: UIComponent): void {
+            this.items[this.count++] = client;
+        }
+
+        /**
+         * Sort ascending (shallowest first) and process the current snapshot.
+         * Items enqueued during processing are kept for the next drain call.
+         */
+        public drainAsc(process: (c: UIComponent) => void): void {
+            if (this.count === 0) return;
+            const n = this.count;
+            const arr = this.items;
+            // insertion sort ascending by nestLevel (nearly sorted in practice)
+            for (let i = 1; i < n; i++) {
+                const cur = arr[i];
+                const level = cur.$nestLevel;
+                let j = i - 1;
+                while (j >= 0 && arr[j].$nestLevel > level) {
+                    arr[j + 1] = arr[j];
+                    j--;
+                }
+                arr[j + 1] = cur;
+            }
+            for (let i = 0; i < n; i++) {
+                const c = arr[i];
+                arr[i] = null;
+                if (c.$stage) process(c);
+            }
+            // slide items added during processing to the front
+            const added = this.count - n;
+            for (let i = 0; i < added; i++) {
+                arr[i] = arr[n + i];
+                arr[n + i] = null;
+            }
+            this.count = added;
+        }
+
+        /**
+         * Sort descending (deepest first) and process the current snapshot.
+         * Items enqueued during processing are kept for the next drain call.
+         */
+        public drainDesc(process: (c: UIComponent) => void): void {
+            if (this.count === 0) return;
+            const n = this.count;
+            const arr = this.items;
+            // insertion sort descending by nestLevel
+            for (let i = 1; i < n; i++) {
+                const cur = arr[i];
+                const level = cur.$nestLevel;
+                let j = i - 1;
+                while (j >= 0 && arr[j].$nestLevel < level) {
+                    arr[j + 1] = arr[j];
+                    j--;
+                }
+                arr[j + 1] = cur;
+            }
+            for (let i = 0; i < n; i++) {
+                const c = arr[i];
+                arr[i] = null;
+                if (c.$stage) process(c);
+            }
+            const added = this.count - n;
+            for (let i = 0; i < added; i++) {
+                arr[i] = arr[n + i];
+                arr[n + i] = null;
+            }
+            this.count = added;
+        }
+
+        public isEmpty(): boolean {
+            return this.count === 0;
+        }
+    }
+
+    /**
+     * @private
      * 失效验证管理器
      */
     export class Validator extends egret.EventDispatcher {
@@ -46,160 +129,70 @@ namespace eui.sys {
         /**
          * @private
          */
-        private targetLevel:number = Number.POSITIVE_INFINITY;
-
-        /**
-         * @private
-         */
-        private invalidatePropertiesFlag:boolean = false;
-
-        /**
-         * @private
-         */
-        private invalidateClientPropertiesFlag:boolean = false;
+        private targetLevel: number = Number.POSITIVE_INFINITY;
 
         /**
          * @private
          * 是否已经添加了tick监听
          */
-        private tickAttached:boolean = false;
-
-        /**
-         * @private
-         */
-        private invalidatePropertiesQueue:DepthQueue = new DepthQueue();
-
-        /**
-         * @private
-         * 标记组件属性失效
-         */
-        public invalidateProperties(client:UIComponent):void {
-            if (!this.invalidatePropertiesFlag) {
-                this.invalidatePropertiesFlag = true;
-                if (!this.listenersAttached)
-                    this.attachListeners();
-            }
-            if (this.targetLevel <= client.$nestLevel)
-                this.invalidateClientPropertiesFlag = true;
-            this.invalidatePropertiesQueue.insert(client);
-        }
-
-        /**
-         * @private
-         * 验证失效的属性
-         */
-        private validateProperties():void {
-            let queue = this.invalidatePropertiesQueue;
-            let client:UIComponent = queue.shift();
-            while (client) {
-                if (client.$stage) {
-                    client.validateProperties();
-                }
-                client = queue.shift();
-            }
-            if (queue.isEmpty())
-                this.invalidatePropertiesFlag = false;
-        }
-
-        /**
-         * @private
-         */
-        private invalidateSizeFlag:boolean = false;
-
-        /**
-         * @private
-         */
-        private invalidateClientSizeFlag:boolean = false;
-
-        /**
-         * @private
-         */
-        private invalidateSizeQueue:DepthQueue = new DepthQueue();
-
-        /**
-         * @private
-         * 标记需要重新测量尺寸
-         */
-        public invalidateSize(client:UIComponent):void {
-            if (!this.invalidateSizeFlag) {
-                this.invalidateSizeFlag = true;
-                if (!this.listenersAttached)
-                    this.attachListeners();
-            }
-            if (this.targetLevel <= client.$nestLevel)
-                this.invalidateClientSizeFlag = true;
-            this.invalidateSizeQueue.insert(client);
-        }
-
-        /**
-         * @private
-         * 测量尺寸
-         */
-        private validateSize():void {
-            let queue = this.invalidateSizeQueue;
-            let client:UIComponent = queue.pop();
-            while (client) {
-                if (client.$stage) {
-                    client.validateSize();
-                }
-                client = queue.pop();
-            }
-            if (queue.isEmpty())
-                this.invalidateSizeFlag = false;
-        }
-
-
-        /**
-         * @private
-         */
-        private invalidateDisplayListFlag:boolean = false;
-
-        /**
-         * @private
-         */
-        private invalidateDisplayListQueue:DepthQueue = new DepthQueue();
-
-        /**
-         * @private
-         * 标记需要重新布局
-         */
-        public invalidateDisplayList(client:UIComponent):void {
-            if (!this.invalidateDisplayListFlag) {
-                this.invalidateDisplayListFlag = true;
-                if (!this.listenersAttached)
-                    this.attachListeners();
-            }
-            this.invalidateDisplayListQueue.insert(client);
-        }
-
-        /**
-         * @private
-         * 重新布局
-         */
-        private validateDisplayList():void {
-            let queue = this.invalidateDisplayListQueue;
-            let client:UIComponent = queue.shift();
-            while (client) {
-                if (client.$stage) {
-                    client.validateDisplayList();
-                }
-                client = queue.shift();
-            }
-            if (queue.isEmpty())
-                this.invalidateDisplayListFlag = false;
-        }
+        private tickAttached: boolean = false;
 
         /**
          * @private
          * 是否已经添加了事件监听
          */
-        private listenersAttached:boolean = false;
+        private listenersAttached: boolean = false;
+
+        /**
+         * @private
+         */
+        private propertiesQueue: FlatQueue = new FlatQueue();
+
+        /**
+         * @private
+         */
+        private sizeQueue: FlatQueue = new FlatQueue();
+
+        /**
+         * @private
+         */
+        private displayListQueue: FlatQueue = new FlatQueue();
+
+        /**
+         * @private
+         * 标记组件属性失效
+         */
+        public invalidateProperties(client: UIComponent): void {
+            this.propertiesQueue.enqueue(client);
+            if (!this.listenersAttached)
+                this.attachListeners();
+        }
+
+        /**
+         * @private
+         * 标记需要重新测量尺寸
+         */
+        public invalidateSize(client: UIComponent): void {
+            this.sizeQueue.enqueue(client);
+            if (!this.listenersAttached)
+                this.attachListeners();
+        }
+
+        /**
+         * @private
+         * 标记需要重新布局
+         */
+        public invalidateDisplayList(client: UIComponent): void {
+            this.displayListQueue.enqueue(client);
+            if (!this.listenersAttached)
+                this.attachListeners();
+        }
 
         /**
          * @private
          * 添加事件监听
          */
-        private attachListeners():void {
+        private attachListeners(): void {
             if (!this.tickAttached) {
                 this.tickAttached = true;
                 egret.startTick(this.onTick, this);
@@ -211,33 +204,22 @@ namespace eui.sys {
          * @private
          * tick回调
          */
-        private onTick(timeStamp:number):boolean {
+        private onTick(timeStamp: number): boolean {
             this.doPhasedInstantiation();
             return true;
         }
 
         /**
          * @private
-         * 
          */
-        private doPhasedInstantiation():void {
-            if (this.invalidatePropertiesFlag) {
-                this.validateProperties();
-            }
-            if (this.invalidateSizeFlag) {
-                this.validateSize();
-            }
+        private doPhasedInstantiation(): void {
+            this.propertiesQueue.drainAsc(c => c.validateProperties());
+            this.sizeQueue.drainDesc(c => c.validateSize());
+            this.displayListQueue.drainAsc(c => c.validateDisplayList());
 
-            if (this.invalidateDisplayListFlag) {
-                this.validateDisplayList();
-            }
-
-            if (this.invalidatePropertiesFlag ||
-                this.invalidateSizeFlag ||
-                this.invalidateDisplayListFlag) {
-                this.attachListeners();
-            }
-            else {
+            if (this.propertiesQueue.count === 0 &&
+                this.sizeQueue.count === 0 &&
+                this.displayListQueue.count === 0) {
                 if (this.tickAttached) {
                     this.tickAttached = false;
                     egret.stopTick(this.onTick, this);
@@ -251,346 +233,103 @@ namespace eui.sys {
          * 使大于等于指定组件层级的元素立即应用属性
          * @param target 要立即应用属性的组件
          */
-        public validateClient(target:UIComponent):void {
-
-            let obj:UIComponent;
-            let done = false;
+        public validateClient(target: UIComponent): void {
             let oldTargetLevel = this.targetLevel;
 
             if (this.targetLevel === Number.POSITIVE_INFINITY)
                 this.targetLevel = target.$nestLevel;
 
-            let propertiesQueue = this.invalidatePropertiesQueue;
-            let sizeQueue = this.invalidateSizeQueue;
-            let displayListQueue = this.invalidateDisplayListQueue;
+            let done = false;
             while (!done) {
                 done = true;
 
-                obj = propertiesQueue.removeSmallestChild(target);
+                let obj = this.removeSubtreeItem(this.propertiesQueue, target, false);
                 while (obj) {
-                    if (obj.$stage) {
-                        obj.validateProperties();
-                    }
-                    obj = propertiesQueue.removeSmallestChild(target);
+                    if (obj.$stage) obj.validateProperties();
+                    obj = this.removeSubtreeItem(this.propertiesQueue, target, false);
                 }
 
-                if (propertiesQueue.isEmpty()) {
-                    this.invalidatePropertiesFlag = false;
-                }
-                this.invalidateClientPropertiesFlag = false;
-
-                obj = sizeQueue.removeLargestChild(target);
+                obj = this.removeSubtreeItem(this.sizeQueue, target, true);
                 while (obj) {
-                    if (obj.$stage) {
-                        obj.validateSize();
+                    if (obj.$stage) obj.validateSize();
+                    if (this.hasSubtreeItems(this.propertiesQueue, target)) {
+                        done = false;
+                        break;
                     }
-                    if (this.invalidateClientPropertiesFlag) {
-                        obj = <UIComponent> (propertiesQueue.removeSmallestChild(target));
-                        if (obj) {
-                            propertiesQueue.insert(obj);
-                            done = false;
-                            break;
-                        }
-                    }
-
-                    obj = sizeQueue.removeLargestChild(target);
+                    obj = this.removeSubtreeItem(this.sizeQueue, target, true);
                 }
 
-                if (sizeQueue.isEmpty()) {
-                    this.invalidateSizeFlag = false;
-                }
-                this.invalidateClientPropertiesFlag = false;
-                this.invalidateClientSizeFlag = false;
-
-                obj = displayListQueue.removeSmallestChild(target);
+                obj = this.removeSubtreeItem(this.displayListQueue, target, false);
                 while (obj) {
-                    if (obj.$stage) {
-                        obj.validateDisplayList();
+                    if (obj.$stage) obj.validateDisplayList();
+                    if (this.hasSubtreeItems(this.propertiesQueue, target) ||
+                        this.hasSubtreeItems(this.sizeQueue, target)) {
+                        done = false;
+                        break;
                     }
-                    if (this.invalidateClientPropertiesFlag) {
-                        obj = propertiesQueue.removeSmallestChild(target);
-                        if (obj) {
-                            propertiesQueue.insert(obj);
-                            done = false;
-                            break;
-                        }
-                    }
-
-                    if (this.invalidateClientSizeFlag) {
-                        obj =sizeQueue.removeLargestChild(target);
-                        if (obj) {
-                            sizeQueue.insert(obj);
-                            done = false;
-                            break;
-                        }
-                    }
-
-                    obj = displayListQueue.removeSmallestChild(target);
-                }
-
-
-                if (displayListQueue.isEmpty()) {
-                    this.invalidateDisplayListFlag = false;
+                    obj = this.removeSubtreeItem(this.displayListQueue, target, false);
                 }
             }
 
-            if (oldTargetLevel === Number.POSITIVE_INFINITY) {
+            if (oldTargetLevel === Number.POSITIVE_INFINITY)
                 this.targetLevel = Number.POSITIVE_INFINITY;
-            }
-        }
-
-    }
-
-
-    /**
-     * @private
-     * 显示列表嵌套深度排序队列
-     */
-    class DepthQueue {
-        /**
-         * 深度队列
-         */
-        private depthBins:{[key:number]:DepthBin} = {};
-
-        /**
-         * 最小深度
-         */
-        private minDepth:number = 0;
-
-        /**
-         * 最大深度
-         */
-        private maxDepth:number = -1;
-
-        /**
-         * 插入一个元素
-         */
-        public insert(client:UIComponent):void {
-            let depth = client.$nestLevel;
-            if (this.maxDepth < this.minDepth) {
-                this.minDepth = this.maxDepth = depth;
-            }
-            else {
-                if (depth < this.minDepth)
-                    this.minDepth = depth;
-                if (depth > this.maxDepth)
-                    this.maxDepth = depth;
-            }
-
-            let bin = this.depthBins[depth];
-
-            if (!bin) {
-                bin = this.depthBins[depth] = new DepthBin();
-            }
-            bin.insert(client);
         }
 
         /**
-         * 从队列尾弹出深度最大的一个对象
+         * @private
+         * Remove and return an item from the queue that belongs to target's subtree.
+         * When maxLevel is true, returns the deepest matching item; otherwise the shallowest.
          */
-        public pop():UIComponent {
-            let client:UIComponent;
+        private removeSubtreeItem(queue: FlatQueue, target: UIComponent, maxLevel: boolean): UIComponent {
+            const nestLevel = target.$nestLevel;
+            const arr = queue.items;
+            const n = queue.count;
+            if (n === 0) return null;
 
-            let minDepth = this.minDepth;
-            if (minDepth <= this.maxDepth) {
-                let bin = this.depthBins[this.maxDepth];
-                while (!bin || bin.length === 0) {
-                    this.maxDepth--;
-                    if (this.maxDepth < minDepth)
-                        return null;
-                    bin = this.depthBins[this.maxDepth];
+            let bestIdx = -1;
+            let bestLevel = maxLevel ? -1 : 2147483647;
+            const isContainer = egret.is(target, "egret.DisplayObjectContainer");
+
+            for (let i = 0; i < n; i++) {
+                const c = arr[i];
+                if (c.$nestLevel < nestLevel) continue;
+                const isSelf = (c as any) === (target as any);
+                if (!isSelf) {
+                    if (!isContainer) continue;
+                    if (!(target as any as egret.DisplayObjectContainer).contains(c as any)) continue;
                 }
-
-                client = bin.pop();
-
-                while (!bin || bin.length == 0) {
-                    this.maxDepth--;
-                    if (this.maxDepth < minDepth)
-                        break;
-                    bin = this.depthBins[this.maxDepth];
+                if (maxLevel ? c.$nestLevel > bestLevel : c.$nestLevel < bestLevel) {
+                    bestLevel = c.$nestLevel;
+                    bestIdx = i;
                 }
-
             }
 
-            return client;
+            if (bestIdx < 0) return null;
+
+            const result = arr[bestIdx];
+            // swap-remove to avoid O(n) shift
+            queue.count--;
+            arr[bestIdx] = arr[queue.count];
+            arr[queue.count] = null;
+            return result;
         }
 
         /**
-         * 从队列首弹出深度最小的一个对象
+         * @private
+         * Check whether the queue contains any item that belongs to target's subtree.
          */
-        public shift():UIComponent {
-            let client:UIComponent;
-
-            let maxDepth = this.maxDepth;
-            if (this.minDepth <= maxDepth) {
-                let bin = this.depthBins[this.minDepth];
-                while (!bin || bin.length === 0) {
-                    this.minDepth++;
-                    if (this.minDepth > maxDepth)
-                        return null;
-                    bin = this.depthBins[this.minDepth];
-                }
-
-                client = bin.pop();
-
-                while (!bin || bin.length == 0) {
-                    this.minDepth++;
-                    if (this.minDepth > maxDepth)
-                        break;
-                    bin = this.depthBins[this.minDepth];
-                }
+        private hasSubtreeItems(queue: FlatQueue, target: UIComponent): boolean {
+            const nestLevel = target.$nestLevel;
+            const arr = queue.items;
+            const n = queue.count;
+            const isContainer = egret.is(target, "egret.DisplayObjectContainer");
+            for (let i = 0; i < n; i++) {
+                const c = arr[i];
+                if (c.$nestLevel < nestLevel) continue;
+                if ((c as any) === (target as any)) return true;
+                if (isContainer && (target as any as egret.DisplayObjectContainer).contains(c as any)) return true;
             }
-
-            return client;
-        }
-
-        /**
-         * 移除大于等于指定组件层级的元素中最大的元素
-         */
-        public removeLargestChild(client:UIComponent):UIComponent {
-            let hashCode = client.$hashCode;
-            let nestLevel = client.$nestLevel;
-            let max = this.maxDepth;
-            let min = nestLevel;
-
-            while (min <= max) {
-                let bin = this.depthBins[max];
-                if (bin && bin.length > 0) {
-                    if (max === nestLevel) {
-                        if (bin.map[hashCode]) {
-                            bin.remove(client);
-                            return client;
-                        }
-                    }
-                    else if(egret.is(client,"egret.DisplayObjectContainer")){
-
-                        let items = bin.items;
-                        let length = bin.length;
-                        for (let i = 0; i < length; i++) {
-                            let value = items[i];
-                            if ((<egret.DisplayObjectContainer><any> client).contains(value)) {
-                                bin.remove(value);
-                                return value;
-                            }
-                        }
-                    }
-                    else{
-                        break;
-                    }
-                    max--;
-                }
-                else {
-                    if (max == this.maxDepth){
-                        this.maxDepth--;
-                    }
-                    max--;
-                    if (max < min)
-                        break;
-                }
-            }
-
-            return null;
-        }
-
-        /**
-         * 移除大于等于指定组件层级的元素中最小的元素
-         */
-        public removeSmallestChild(client:UIComponent):UIComponent {
-            let nestLevel = client.$nestLevel;
-            let min = nestLevel;
-            let max = this.maxDepth;
-            let hashCode = client.$hashCode;
-            while (min <= max) {
-                let bin = this.depthBins[min];
-                if (bin && bin.length > 0) {
-                    if (min === nestLevel) {
-                        if (bin.map[hashCode]) {
-                            bin.remove(client);
-                            return client;
-                        }
-                    }
-                    else if(egret.is(client,"egret.DisplayObjectContainer")){
-                        let items = bin.items;
-                        let length = bin.length;
-                        for (let i = 0; i < length; i++) {
-                            let value = items[i];
-                            if ((<egret.DisplayObjectContainer><any> client).contains(value)) {
-                                bin.remove(value);
-                                return value;
-                            }
-                        }
-                    }
-                    else{
-                        break;
-                    }
-
-                    min++;
-                }
-                else {
-                    if (min == this.minDepth)
-                        this.minDepth++;
-                    min++;
-                    if (min > max)
-                        break;
-                }
-            }
-
-            return null;
-        }
-
-        /**
-         * 队列是否为空
-         */
-        public isEmpty():boolean {
-            return this.minDepth > this.maxDepth;
-        }
-    }
-    /**
-     * @private
-     * 列表项
-     */
-    class DepthBin {
-        public map:{[key:number]:boolean} = {};
-        public items:UIComponent[] = [];
-        public length:number = 0;
-
-        public insert(client:UIComponent):void {
-            let hashCode = client.$hashCode;
-            if (this.map[hashCode]) {
-                return;
-            }
-            this.map[hashCode] = true;
-            this.length++;
-            this.items.push(client);
-        }
-
-        public pop():UIComponent {
-            let client = this.items.pop();//使用pop会比shift有更高的性能，避免索引整体重置。
-            if (client) {
-                this.length--;
-                if(this.length===0){
-                    this.map = {};//清空所有key防止内存泄露
-                }
-                else{
-                    this.map[client.$hashCode] = false;
-                }
-            }
-            return client;
-        }
-
-        public remove(client:UIComponent):void {
-            let index = this.items.indexOf(client);
-            if (index >= 0) {
-                this.length--;
-                if (this.length === 0) {
-                    this.items.length = 0;
-                    this.map = {};//清空所有key防止内存泄露
-                } else {
-                    this.items[index] = this.items[this.length];
-                    this.items.length = this.length;
-                    this.map[client.$hashCode] = false;
-                }
-            }
+            return false;
         }
     }
 }

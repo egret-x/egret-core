@@ -896,9 +896,9 @@ namespace eui.sys {
                 21: 0,              //oldY
                 22: 0,              //oldWidth
                 23: 0,              //oldHeight
-                24: true,           //invalidatePropertiesFlag
-                25: true,           //invalidateSizeFlag
-                26: true,           //invalidateDisplayListFlag
+                24: false,          //invalidatePropertiesFlag (unused, replaced by $dirtyFlags)
+                25: false,          //invalidateSizeFlag (unused, replaced by $dirtyFlags)
+                26: false,          //invalidateDisplayListFlag (unused, replaced by $dirtyFlags)
                 27: false,          //layoutWidthExplicitlySet
                 28: false,          //layoutHeightExplicitlySet
                 29: false,          //initialized
@@ -907,6 +907,7 @@ namespace eui.sys {
             //if egret
             this.$touchEnabled = true;
             //endif*/
+            this.$dirtyFlags = 7; // properties(1) | size(2) | displayList(4) all dirty on init
         }
 
 
@@ -964,6 +965,8 @@ namespace eui.sys {
 
         $UIComponent: Object;
 
+        $dirtyFlags: number;
+
         $includeInLayout: boolean;
 
         /**
@@ -1007,14 +1010,13 @@ namespace eui.sys {
          * 检查属性失效标记并应用
          */
         private checkInvalidateFlag(event?: Event): void {
-            let values = this.$UIComponent;
-            if (values[sys.UIKeys.invalidatePropertiesFlag]) {
+            if (this.$dirtyFlags & 1) {
                 validator.invalidateProperties(this);
             }
-            if (values[sys.UIKeys.invalidateSizeFlag]) {
+            if (this.$dirtyFlags & 2) {
                 validator.invalidateSize(this);
             }
-            if (values[sys.UIKeys.invalidateDisplayListFlag]) {
+            if (this.$dirtyFlags & 4) {
                 validator.invalidateDisplayList(this);
             }
         }
@@ -1451,9 +1453,8 @@ namespace eui.sys {
          * 标记属性失效
          */
         public invalidateProperties(): void {
-            let values = this.$UIComponent;
-            if (!values[sys.UIKeys.invalidatePropertiesFlag]) {
-                values[sys.UIKeys.invalidatePropertiesFlag] = true;
+            if (!(this.$dirtyFlags & 1)) {
+                this.$dirtyFlags |= 1;
                 if (this.$stage)
                     validator.invalidateProperties(this);
             }
@@ -1464,10 +1465,9 @@ namespace eui.sys {
          * 验证组件的属性
          */
         public validateProperties(): void {
-            let values = this.$UIComponent;
-            if (values[sys.UIKeys.invalidatePropertiesFlag]) {
+            if (this.$dirtyFlags & 1) {
                 this.commitProperties();
-                values[sys.UIKeys.invalidatePropertiesFlag] = false;
+                this.$dirtyFlags &= ~1;
             }
         }
 
@@ -1476,9 +1476,8 @@ namespace eui.sys {
          * 标记提交过需要验证组件尺寸
          */
         public invalidateSize(): void {
-            let values = this.$UIComponent;
-            if (!values[sys.UIKeys.invalidateSizeFlag]) {
-                values[sys.UIKeys.invalidateSizeFlag] = true;
+            if (!(this.$dirtyFlags & 2)) {
+                this.$dirtyFlags |= 2;
                 if (this.$stage)
                     validator.invalidateSize(this);
             }
@@ -1501,14 +1500,13 @@ namespace eui.sys {
                     }
                 }
             }
-            let values = this.$UIComponent;
-            if (values[sys.UIKeys.invalidateSizeFlag]) {
+            if (this.$dirtyFlags & 2) {
                 let changed = this.measureSizes();
                 if (changed) {
                     this.invalidateDisplayList();
                     this.invalidateParentLayout();
                 }
-                values[sys.UIKeys.invalidateSizeFlag] = false;
+                this.$dirtyFlags &= ~2;
             }
         }
 
@@ -1518,10 +1516,9 @@ namespace eui.sys {
          */
         private measureSizes(): boolean {
             let changed = false;
-            let values = this.$UIComponent;
-            if (!values[sys.UIKeys.invalidateSizeFlag])
+            if (!(this.$dirtyFlags & 2))
                 return changed;
-
+            let values = this.$UIComponent;
             if (isNaN(values[UIKeys.explicitWidth]) || isNaN(values[UIKeys.explicitHeight])) {
                 this.measure();
                 if (values[UIKeys.measuredWidth] < values[UIKeys.minWidth]) {
@@ -1553,9 +1550,8 @@ namespace eui.sys {
          * 标记需要验证显示列表
          */
         public invalidateDisplayList(): void {
-            let values = this.$UIComponent;
-            if (!values[sys.UIKeys.invalidateDisplayListFlag]) {
-                values[sys.UIKeys.invalidateDisplayListFlag] = true;
+            if (!(this.$dirtyFlags & 4)) {
+                this.$dirtyFlags |= 4;
                 if (this.$stage)
                     validator.invalidateDisplayList(this);
             }
@@ -1566,11 +1562,11 @@ namespace eui.sys {
          * 验证子项的位置和大小，并绘制其他可视内容
          */
         public validateDisplayList(): void {
-            let values = this.$UIComponent;
-            if (values[sys.UIKeys.invalidateDisplayListFlag]) {
+            if (this.$dirtyFlags & 4) {
+                let values = this.$UIComponent;
                 this.updateFinalSize();
                 this.updateDisplayList(values[UIKeys.width], values[UIKeys.height]);
-                values[sys.UIKeys.invalidateDisplayListFlag] = false;
+                this.$dirtyFlags &= ~4;
             }
         }
 
