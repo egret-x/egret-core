@@ -19704,6 +19704,874 @@ var eui;
 //  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 //  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// //////////////////////////////////////////////////////////////////////////////////////
+var eui;
+(function (eui) {
+    //==========================================================================
+    // ECS Dirty Flags (bitfield for efficient dirty tracking)
+    //==========================================================================
+    /**
+     * @language en_US
+     * ECS-style dirty flags for efficient component state tracking.
+     * Combines multiple dirty states into a single bitfield.
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECS风格的脏标记，用于高效的组件状态跟踪。
+     * 将多个脏状态组合成单个位域。
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    eui.ECS_DIRTY_NONE = 0;
+    eui.ECS_DIRTY_PROPERTIES = 1;
+    eui.ECS_DIRTY_MEASURE = 2;
+    eui.ECS_DIRTY_LAYOUT = 4;
+    //==========================================================================
+    // ECS Node - Base class for ECS-style components
+    //==========================================================================
+    /**
+     * @language en_US
+     * ECSNode is the base class for ECS-style EUI components.
+     * It extends DisplayObjectContainer and provides lifecycle hooks for
+     * properties committing, measuring, and layout.
+     *
+     * Key differences from Component:
+     * - No Skin container layer (reduced display tree depth)
+     * - World scheduler instead of Validator (simpler dirty management)
+     * - Direct function calls instead of IOverride iteration
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSNode 是 ECS 风格 EUI 组件的基类。
+     * 它继承自 DisplayObjectContainer，提供属性提交、测量和布局的生命周期钩子。
+     *
+     * 与 Component 的主要区别：
+     * - 无 Skin 容器层（减少显示树深度）
+     * - World 调度器替代 Validator（更简单的脏管理）
+     * - 直接函数调用替代 IOverride 遍历
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    var ECSNode = (function (_super) {
+        __extends(ECSNode, _super);
+        //======================================================================
+        // Constructor
+        //======================================================================
+        function ECSNode() {
+            var _this = _super.call(this) || this;
+            /**
+             * Reference to the ECSWorld this node belongs to
+             */
+            _this.$ecsWorld = null;
+            /**
+             * Nest level in the display tree (used for traversal order)
+             */
+            _this.nestLevel = 0;
+            //======================================================================
+            // Layout Properties
+            //======================================================================
+            /** Explicit width set by user */
+            _this.explicitWidth = NaN;
+            /** Explicit height set by user */
+            _this.explicitHeight = NaN;
+            /** Measured width from layout */
+            _this.measuredWidth = 0;
+            /** Measured height from layout */
+            _this.measuredHeight = 0;
+            /** Layout width (after constraints applied) */
+            _this.layoutWidth = 0;
+            /** Layout height (after constraints applied) */
+            _this.layoutHeight = 0;
+            //======================================================================
+            // Constraint Properties
+            //======================================================================
+            _this.left = NaN;
+            _this.right = NaN;
+            _this.top = NaN;
+            _this.bottom = NaN;
+            _this.horizontalCenter = NaN;
+            _this.verticalCenter = NaN;
+            _this.percentWidth = NaN;
+            _this.percentHeight = NaN;
+            //======================================================================
+            // Dirty Flag
+            //======================================================================
+            /**
+             * Dirty bitfield - combines ECS_DIRTY_PROPERTIES, ECS_DIRTY_MEASURE, ECS_DIRTY_LAYOUT
+             */
+            _this.ecsDirty = eui.ECS_DIRTY_NONE;
+            _this.ecsNodeId = ECSWorld.nextId();
+            return _this;
+        }
+        //======================================================================
+        // Lifecycle Hooks (to be overridden by subclasses)
+        //======================================================================
+        /**
+         * Called when children should be created. Equivalent to createChildren().
+         * @internal
+         */
+        ECSNode.prototype.$createChildren = function () {
+            // Override in subclass
+        };
+        /**
+         * Called when properties should be committed.
+         * This is where state changes, binding updates, etc. happen.
+         * @internal
+         */
+        ECSNode.prototype.$commitProperties = function () {
+            // Override in subclass
+        };
+        /**
+         * Called when measurement should be performed.
+         * Should set measuredWidth and measuredHeight.
+         * @internal
+         */
+        ECSNode.prototype.$measure = function () {
+            // Override in subclass
+        };
+        /**
+         * Called when layout should be performed.
+         * Should position and size children based on layout rules.
+         * @internal
+         */
+        ECSNode.prototype.$doLayout = function () {
+            // Override in subclass
+        };
+        //======================================================================
+        // Invalidation API (called by subclasses or user code)
+        //======================================================================
+        /**
+         * Mark properties as dirty, requiring $commitProperties() in next flush.
+         */
+        ECSNode.prototype.invalidateProperties = function () {
+            if (this.$ecsWorld) {
+                this.$ecsWorld.markDirty(this, eui.ECS_DIRTY_PROPERTIES);
+            }
+        };
+        /**
+         * Mark size as dirty, requiring $measure() in next flush.
+         */
+        ECSNode.prototype.invalidateSize = function () {
+            if (this.$ecsWorld) {
+                this.$ecsWorld.markDirty(this, eui.ECS_DIRTY_MEASURE);
+            }
+        };
+        /**
+         * Mark display list as dirty, requiring $doLayout() in next flush.
+         */
+        ECSNode.prototype.invalidateDisplayList = function () {
+            if (this.$ecsWorld) {
+                this.$ecsWorld.markDirty(this, eui.ECS_DIRTY_LAYOUT);
+            }
+        };
+        /**
+         * Immediately validate and flush all dirty states.
+         * Use with caution - bypasses the normal frame batching.
+         */
+        ECSNode.prototype.validateNow = function () {
+            if (this.$ecsWorld) {
+                this.$ecsWorld.validateNode(this);
+            }
+        };
+        //======================================================================
+        // Helper Methods
+        //======================================================================
+        /**
+         * Check if this node has any dirty flags set.
+         */
+        ECSNode.prototype.isDirty = function () {
+            return this.ecsDirty !== eui.ECS_DIRTY_NONE;
+        };
+        /**
+         * Clear all dirty flags.
+         */
+        ECSNode.prototype.clearDirty = function () {
+            this.ecsDirty = eui.ECS_DIRTY_NONE;
+        };
+        /**
+         * Register this node with an ECSWorld.
+         * @internal
+         */
+        ECSNode.prototype.$register = function (world) {
+            this.$ecsWorld = world;
+            this.updateNestLevel();
+        };
+        /**
+         * Unregister this node from its ECSWorld.
+         * @internal
+         */
+        ECSNode.prototype.$unregister = function () {
+            this.$ecsWorld = null;
+        };
+        /**
+         * Update nest level based on parent's level.
+         * @internal
+         */
+        ECSNode.prototype.$onParentChanged = function () {
+            this.updateNestLevel();
+        };
+        /**
+         * Update nest level recursively.
+         */
+        ECSNode.prototype.updateNestLevel = function () {
+            var parent = this.$parent;
+            if (parent && parent instanceof ECSNode) {
+                this.nestLevel = parent.nestLevel + 1;
+            }
+            else {
+                this.nestLevel = 1;
+            }
+            // Update children recursively
+            var children = this.$children;
+            if (children) {
+                for (var i = 0; i < children.length; i++) {
+                    var child = children[i];
+                    if (child instanceof ECSNode) {
+                        child.updateNestLevel();
+                    }
+                }
+            }
+        };
+        /**
+         * Dispose this node and all its children.
+         */
+        ECSNode.prototype.dispose = function () {
+            // Unregister from world
+            if (this.$ecsWorld) {
+                this.$unregister();
+            }
+            // Dispose children
+            var children = this.$children;
+            if (children) {
+                for (var i = children.length - 1; i >= 0; i--) {
+                    var child = children[i];
+                    if (child instanceof ECSNode) {
+                        child.dispose();
+                    }
+                    else if ('dispose' in child && typeof child.dispose === 'function') {
+                        child.dispose();
+                    }
+                }
+            }
+            // Remove from parent
+            if (this.$parent) {
+                this.$parent.removeChild(this);
+            }
+        };
+        return ECSNode;
+    }(egret.DisplayObjectContainer));
+    eui.ECSNode = ECSNode;
+    __reflect(ECSNode.prototype, "eui.ECSNode");
+    //==========================================================================
+    // ECS Container Node - Container with layout support
+    //==========================================================================
+    /**
+     * @language en_US
+     * ECSContainer is an ECSNode with layout support.
+     * It holds an ECSLayoutStrategy reference and delegates measurement/layout to it.
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSContainer 是支持布局的 ECSNode。
+     * 它持有 ECSLayoutStrategy 引用，并将测量/布局委托给它。
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    var ECSContainer = (function (_super) {
+        __extends(ECSContainer, _super);
+        function ECSContainer() {
+            //======================================================================
+            // Layout Component
+            //======================================================================
+            var _this = _super !== null && _super.apply(this, arguments) || this;
+            /** The layout strategy used by this container */
+            _this.layout = null;
+            /** Whether layout should be automatically updated */
+            _this.autoLayout = true;
+            //======================================================================
+            // Content Size (IViewport)
+            //======================================================================
+            _this._contentWidth = 0;
+            _this._contentHeight = 0;
+            /** Horizontal scroll position */
+            _this._scrollH = 0;
+            /** Vertical scroll position */
+            _this._scrollV = 0;
+            /** Whether scroll is enabled */
+            _this._scrollEnabled = false;
+            //======================================================================
+            // Cached ScrollRect for Performance
+            //======================================================================
+            _this._scrollRect = null;
+            //======================================================================
+            // Scroll begin/end for layout pause during scrolling
+            //======================================================================
+            _this._isScrolling = false;
+            return _this;
+        }
+        //======================================================================
+        // Lifecycle - Override
+        //======================================================================
+        ECSContainer.prototype.$measure = function () {
+            if (this.layout) {
+                this.layout.measure(this);
+            }
+            else {
+                // Default: use explicit or measured size
+                this.measuredWidth = isNaN(this.explicitWidth) ? this.$getWidth() : this.explicitWidth;
+                this.measuredHeight = isNaN(this.explicitHeight) ? this.$getHeight() : this.explicitHeight;
+            }
+        };
+        ECSContainer.prototype.$doLayout = function () {
+            if (!this.layout)
+                return;
+            var width = isNaN(this.explicitWidth) ? this.$getWidth() : this.explicitWidth;
+            var height = isNaN(this.explicitHeight) ? this.$getHeight() : this.explicitHeight;
+            this.layout.layout(this, width, height);
+            // Update scrollRect if needed
+            this.updateScrollRect();
+            // Invalidate parent size if content size changed
+            if (this.autoLayout) {
+                var newContentWidth = this.calculateContentWidth();
+                var newContentHeight = this.calculateContentHeight();
+                if (newContentWidth !== this._contentWidth || newContentHeight !== this._contentHeight) {
+                    this._contentWidth = newContentWidth;
+                    this._contentHeight = newContentHeight;
+                    this.invalidateSize();
+                }
+            }
+        };
+        //======================================================================
+        // Layout API
+        //======================================================================
+        /**
+         * Set the layout strategy.
+         */
+        ECSContainer.prototype.setLayout = function (strategy) {
+            if (this.layout === strategy)
+                return;
+            this.layout = strategy;
+            if (strategy) {
+                // Register for virtual layout if needed
+                if (strategy.useVirtualLayout) {
+                    this.setupVirtualLayout();
+                }
+            }
+            this.invalidateSize();
+            this.invalidateDisplayList();
+        };
+        /**
+         * Set element at index to visible/invisible for virtual layout.
+         */
+        ECSContainer.prototype.setElementVisible = function (index, visible) {
+            var child = this.$children[index];
+            if (child) {
+                child.visible = visible;
+            }
+        };
+        /**
+         * Get visible range for virtual layout.
+         */
+        ECSContainer.prototype.getVisibleRange = function () {
+            if (this.layout && this.layout.getVisibleRange) {
+                return this.layout.getVisibleRange(this._scrollV, this.$getHeight());
+            }
+            return [0, this.$children ? this.$children.length - 1 : 0];
+        };
+        /**
+         * Setup virtual layout support.
+         */
+        ECSContainer.prototype.setupVirtualLayout = function () {
+            // Virtual layout will be implemented in ECSVirtualList
+            // This is a placeholder for common setup
+        };
+        //======================================================================
+        // Scroll begin/end for layout pause
+        //======================================================================
+        /**
+         * Called when scroll begins - pause layout validation
+         */
+        ECSContainer.prototype.setScrollBegin = function () {
+            this._isScrolling = true;
+        };
+        /**
+         * Called when scroll ends - resume layout validation
+         */
+        ECSContainer.prototype.setScrollEnd = function () {
+            this._isScrolling = false;
+            this.invalidateDisplayList();
+        };
+        Object.defineProperty(ECSContainer.prototype, "isScrolling", {
+            /**
+             * Check if currently scrolling
+             */
+            get: function () {
+                return this._isScrolling;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(ECSContainer.prototype, "scrollH", {
+            //======================================================================
+            // Scroll API (IViewport compatible)
+            //======================================================================
+            get: function () {
+                return this._scrollH;
+            },
+            set: function (value) {
+                value = Math.max(0, value);
+                if (value !== this._scrollH) {
+                    this._scrollH = value;
+                    this.updateScrollRect();
+                    this.invalidateDisplayList();
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(ECSContainer.prototype, "scrollV", {
+            get: function () {
+                return this._scrollV;
+            },
+            set: function (value) {
+                value = Math.max(0, value);
+                if (value !== this._scrollV) {
+                    this._scrollV = value;
+                    this.updateScrollRect();
+                    this.invalidateDisplayList();
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(ECSContainer.prototype, "scrollEnabled", {
+            get: function () {
+                return this._scrollEnabled;
+            },
+            set: function (value) {
+                if (value !== this._scrollEnabled) {
+                    this._scrollEnabled = value;
+                    this.updateScrollRect();
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(ECSContainer.prototype, "contentWidth", {
+            get: function () {
+                return this._contentWidth;
+            },
+            set: function (value) {
+                if (value !== this._contentWidth) {
+                    this._contentWidth = value;
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(ECSContainer.prototype, "contentHeight", {
+            get: function () {
+                return this._contentHeight;
+            },
+            set: function (value) {
+                if (value !== this._contentHeight) {
+                    this._contentHeight = value;
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
+        //======================================================================
+        // ScrollRect Optimization
+        //======================================================================
+        ECSContainer.prototype.updateScrollRect = function () {
+            if (this._scrollEnabled) {
+                if (!this._scrollRect) {
+                    this._scrollRect = new egret.Rectangle();
+                }
+                this._scrollRect.x = this._scrollH;
+                this._scrollRect.y = this._scrollV;
+                this._scrollRect.width = isNaN(this.explicitWidth) ? this.$getWidth() : this.explicitWidth;
+                this._scrollRect.height = isNaN(this.explicitHeight) ? this.$getHeight() : this.explicitHeight;
+                this.scrollRect = this._scrollRect;
+            }
+            else if (this.scrollRect) {
+                this.scrollRect = null;
+            }
+        };
+        //======================================================================
+        // Helper Methods
+        //======================================================================
+        /**
+         * Calculate total content width based on children.
+         */
+        ECSContainer.prototype.calculateContentWidth = function () {
+            var maxWidth = 0;
+            var children = this.$children;
+            if (children) {
+                for (var i = 0; i < children.length; i++) {
+                    var child = children[i];
+                    if (child.visible) {
+                        maxWidth = Math.max(maxWidth, child.x + child.width);
+                    }
+                }
+            }
+            return maxWidth;
+        };
+        /**
+         * Calculate total content height based on children.
+         */
+        ECSContainer.prototype.calculateContentHeight = function () {
+            var maxHeight = 0;
+            var children = this.$children;
+            if (children) {
+                for (var i = 0; i < children.length; i++) {
+                    var child = children[i];
+                    if (child.visible) {
+                        maxHeight = Math.max(maxHeight, child.y + child.height);
+                    }
+                }
+            }
+            return maxHeight;
+        };
+        /**
+         * Get element at specific index.
+         */
+        ECSContainer.prototype.getElementAt = function (index) {
+            return this.$children ? this.$children[index] : null;
+        };
+        Object.defineProperty(ECSContainer.prototype, "numElements", {
+            /**
+             * Get number of elements.
+             */
+            get: function () {
+                return this.$children ? this.$children.length : 0;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        /**
+         * Dispose this container and its children.
+         */
+        ECSContainer.prototype.dispose = function () {
+            // Dispose children first
+            var children = this.$children;
+            if (children) {
+                for (var i = children.length - 1; i >= 0; i--) {
+                    var child = children[i];
+                    if (child instanceof ECSContainer) {
+                        child.dispose();
+                    }
+                    else if ('dispose' in child && typeof child.dispose === 'function') {
+                        child.dispose();
+                    }
+                }
+            }
+            // Clear layout
+            this.layout = null;
+            // Call super dispose
+            _super.prototype.dispose.call(this);
+        };
+        return ECSContainer;
+    }(ECSNode));
+    eui.ECSContainer = ECSContainer;
+    __reflect(ECSContainer.prototype, "eui.ECSContainer");
+    //==========================================================================
+    // ECS Layout Constants
+    //==========================================================================
+    eui.ECS_HORIZONTAL_ALIGN_LEFT = "left";
+    eui.ECS_HORIZONTAL_ALIGN_CENTER = "center";
+    eui.ECS_HORIZONTAL_ALIGN_RIGHT = "right";
+    eui.ECS_HORIZONTAL_ALIGN_JUSTIFY = "justify";
+    eui.ECS_VERTICAL_ALIGN_TOP = "top";
+    eui.ECS_VERTICAL_ALIGN_MIDDLE = "middle";
+    eui.ECS_VERTICAL_ALIGN_BOTTOM = "bottom";
+    eui.ECS_VERTICAL_ALIGN_JUSTIFY = "justify";
+    //==========================================================================
+    // ECS World - Scheduler replacing Validator
+    //==========================================================================
+    /**
+     * @language en_US
+     * ECSWorld is the scheduler that replaces Validator.
+     * It manages dirty nodes and flushes them in three ordered passes:
+     * 1. Properties (parent before child, shallow to deep)
+     * 2. Measure (child before parent, deep to shallow)
+     * 3. Layout (parent before child, shallow to deep)
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSWorld 是替代 Validator 的调度器。
+     * 它管理脏节点并在三趟有序遍历中刷新：
+     * 1. 属性提交（父先于子，浅到深）
+     * 2. 测量（子先于父，深到浅）
+     * 3. 布局（父先于子，浅到深）
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    var ECSWorld = (function () {
+        //======================================================================
+        // Constructor
+        //======================================================================
+        function ECSWorld() {
+            //======================================================================
+            // Private State
+            //======================================================================
+            /** Nodes with dirty properties */
+            this.propertiesDirty = [];
+            /** Nodes with dirty measure */
+            this.measureDirty = [];
+            /** Nodes with dirty layout */
+            this.layoutDirty = [];
+            /** Whether tick is currently active */
+            this.tickActive = false;
+            this.tickCallback = this.onTick.bind(this);
+        }
+        /**
+         * Generate next unique node ID
+         */
+        ECSWorld.nextId = function () {
+            return ++ECSWorld._idSeq;
+        };
+        //======================================================================
+        // Public API
+        //======================================================================
+        /**
+         * Mark a node as dirty with specified flags.
+         * @param node The node to mark dirty
+         * @param flag Dirty flags (can be combined with bitwise OR)
+         */
+        ECSWorld.prototype.markDirty = function (node, flag) {
+            var wasClean = node.ecsDirty === eui.ECS_DIRTY_NONE;
+            node.ecsDirty |= flag;
+            // Push to appropriate queues
+            if (flag & eui.ECS_DIRTY_PROPERTIES) {
+                this.propertiesDirty.push(node);
+            }
+            if (flag & eui.ECS_DIRTY_MEASURE) {
+                this.measureDirty.push(node);
+            }
+            if (flag & eui.ECS_DIRTY_LAYOUT) {
+                this.layoutDirty.push(node);
+            }
+            // Start tick if needed
+            if (wasClean && !this.tickActive) {
+                this.tickActive = true;
+                egret.startTick(this.tickCallback, this);
+            }
+        };
+        /**
+         * Validate a single node immediately, bypassing the queue.
+         * @param node The node to validate
+         */
+        ECSWorld.prototype.validateNode = function (node) {
+            // Pass 1: Properties
+            if (node.ecsDirty & eui.ECS_DIRTY_PROPERTIES) {
+                node.ecsDirty &= ~eui.ECS_DIRTY_PROPERTIES;
+                node.$commitProperties();
+            }
+            // Pass 2: Measure
+            if (node.ecsDirty & eui.ECS_DIRTY_MEASURE) {
+                node.ecsDirty &= ~eui.ECS_DIRTY_MEASURE;
+                node.$measure();
+            }
+            // Pass 3: Layout
+            if (node.ecsDirty & eui.ECS_DIRTY_LAYOUT) {
+                node.ecsDirty &= ~eui.ECS_DIRTY_LAYOUT;
+                node.$doLayout();
+            }
+        };
+        /**
+         * Manually flush all dirty nodes. Usually called by tick.
+         * @returns Whether any work was done
+         */
+        ECSWorld.prototype.flush = function () {
+            var didWork = false;
+            // Pass 1: Properties (shallow to deep - sort by nestLevel ascending)
+            if (this.propertiesDirty.length > 0) {
+                this.sortAscending(this.propertiesDirty);
+                var nodes = this.propertiesDirty;
+                var i = 0;
+                var len = nodes.length;
+                while (i < len) {
+                    var n = nodes[i];
+                    nodes[i++] = null; // Help GC
+                    if (n.$stage && (n.ecsDirty & eui.ECS_DIRTY_PROPERTIES)) {
+                        n.ecsDirty &= ~eui.ECS_DIRTY_PROPERTIES;
+                        n.$commitProperties();
+                        didWork = true;
+                    }
+                }
+                nodes.length = 0;
+            }
+            // Pass 2: Measure (deep to shallow - sort by nestLevel descending)
+            if (this.measureDirty.length > 0) {
+                this.sortDescending(this.measureDirty);
+                var nodes = this.measureDirty;
+                var i = 0;
+                var len = nodes.length;
+                while (i < len) {
+                    var n = nodes[i];
+                    nodes[i++] = null;
+                    if (n.$stage && (n.ecsDirty & eui.ECS_DIRTY_MEASURE)) {
+                        n.ecsDirty &= ~eui.ECS_DIRTY_MEASURE;
+                        n.$measure();
+                        didWork = true;
+                    }
+                }
+                nodes.length = 0;
+            }
+            // Pass 3: Layout (shallow to deep - sort by nestLevel ascending)
+            if (this.layoutDirty.length > 0) {
+                this.sortAscending(this.layoutDirty);
+                var nodes = this.layoutDirty;
+                var i = 0;
+                var len = nodes.length;
+                while (i < len) {
+                    var n = nodes[i];
+                    nodes[i++] = null;
+                    if (n.$stage && (n.ecsDirty & eui.ECS_DIRTY_LAYOUT)) {
+                        n.ecsDirty &= ~eui.ECS_DIRTY_LAYOUT;
+                        n.$doLayout();
+                        didWork = true;
+                    }
+                }
+                nodes.length = 0;
+            }
+            // Stop tick if no more work
+            if (this.propertiesDirty.length === 0 &&
+                this.measureDirty.length === 0 &&
+                this.layoutDirty.length === 0) {
+                if (this.tickActive) {
+                    this.tickActive = false;
+                    egret.stopTick(this.tickCallback, this);
+                }
+            }
+            return didWork;
+        };
+        /**
+         * Check if there are any dirty nodes.
+         */
+        ECSWorld.prototype.isDirty = function () {
+            return this.propertiesDirty.length > 0 ||
+                this.measureDirty.length > 0 ||
+                this.layoutDirty.length > 0;
+        };
+        /**
+         * Get count of dirty nodes (for debugging).
+         */
+        ECSWorld.prototype.getDirtyCount = function () {
+            return this.propertiesDirty.length +
+                this.measureDirty.length +
+                this.layoutDirty.length;
+        };
+        /**
+         * Clear all dirty queues (for debugging/testing).
+         */
+        ECSWorld.prototype.clear = function () {
+            this.propertiesDirty.length = 0;
+            this.measureDirty.length = 0;
+            this.layoutDirty.length = 0;
+            if (this.tickActive) {
+                this.tickActive = false;
+                egret.stopTick(this.tickCallback, this);
+            }
+        };
+        //======================================================================
+        // Private Methods
+        //======================================================================
+        /**
+         * Frame tick callback
+         */
+        ECSWorld.prototype.onTick = function (timeStamp) {
+            this.flush();
+            return true; // Continue ticking
+        };
+        /**
+         * Sort nodes by nestLevel ascending (shallow first)
+         */
+        ECSWorld.prototype.sortAscending = function (nodes) {
+            // Insertion sort is faster for nearly-sorted arrays
+            var len = nodes.length;
+            for (var i = 1; i < len; i++) {
+                var node = nodes[i];
+                var j = i - 1;
+                while (j >= 0 && nodes[j].nestLevel > node.nestLevel) {
+                    nodes[j + 1] = nodes[j];
+                    j--;
+                }
+                nodes[j + 1] = node;
+            }
+        };
+        /**
+         * Sort nodes by nestLevel descending (deep first)
+         */
+        ECSWorld.prototype.sortDescending = function (nodes) {
+            // Insertion sort is faster for nearly-sorted arrays
+            var len = nodes.length;
+            for (var i = 1; i < len; i++) {
+                var node = nodes[i];
+                var j = i - 1;
+                while (j >= 0 && nodes[j].nestLevel < node.nestLevel) {
+                    nodes[j + 1] = nodes[j];
+                    j--;
+                }
+                nodes[j + 1] = node;
+            }
+        };
+        //======================================================================
+        // Singleton
+        //======================================================================
+        /**
+         * Global singleton instance
+         */
+        ECSWorld.instance = new ECSWorld();
+        ECSWorld._idSeq = 0;
+        return ECSWorld;
+    }());
+    eui.ECSWorld = ECSWorld;
+    __reflect(ECSWorld.prototype, "eui.ECSWorld");
+})(eui || (eui = {}));
+//////////////////////////////////////////////////////////////////////////////////////
+//
+//  Copyright (c) 2014-present, Egret Technology.
+//  All rights reserved.
+//  Redistribution and use in source and binary forms, with or without
+//  modification, are permitted provided that the following conditions are met:
+//
+//     * Redistributions of source code must retain the above copyright
+//       notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above copyright
+//       notice, this list of conditions and the following disclaimer in the
+//       documentation and/or other materials provided with the distribution.
+//     * Neither the name of the Egret nor the
+//       names of its contributors may be used to endorse or promote products
+//       derived from this software without specific prior written permission.
+//
+//  THIS SOFTWARE IS PROVIDED BY EGRET AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
+//  OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+//  OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+//  IN NO EVENT SHALL EGRET AND CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+//  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+//  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;LOSS OF USE, DATA,
+//  OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+//  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+//  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
 //////////////////////////////////////////////////////////////////////////////////////
 var eui;
 (function (eui) {
@@ -24829,6 +25697,614 @@ var eui;
     }(eui.LinearLayoutBase));
     eui.VerticalLayout = VerticalLayout;
     __reflect(VerticalLayout.prototype, "eui.VerticalLayout");
+})(eui || (eui = {}));
+//////////////////////////////////////////////////////////////////////////////////////
+//
+//  Copyright (c) 2014-present, Egret Technology.
+//  All rights reserved.
+//  Redistribution and use in source and binary forms, with or without
+//  modification, are permitted provided that the following conditions are met:
+//
+//     * Redistributions of source code must retain the above copyright
+//       notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above copyright
+//       notice, this list of conditions and the following disclaimer in the
+//       documentation and/or other materials provided with the distribution.
+//     * Neither the name of the Egret nor the
+//       names of its contributors may be used to endorse or promote products
+//       derived from this software without specific prior written permission.
+//
+//  THIS SOFTWARE IS PROVIDED BY EGRET AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
+//  OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+//  OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+//  IN NO EVENT SHALL EGRET AND CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+//  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+//  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;LOSS OF USE, DATA,
+//  OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+//  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+//  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//////////////////////////////////////////////////////////////////////////////////////
+var eui;
+(function (eui) {
+    //==========================================================================
+    // ECS Vertical Layout
+    //==========================================================================
+    /**
+     * @language en_US
+     * ECSVerticalLayout arranges children in a vertical stack.
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSVerticalLayout 将子项垂直堆叠排列。
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    var ECSVerticalLayout = (function () {
+        function ECSVerticalLayout() {
+            //======================================================================
+            // Properties
+            //======================================================================
+            this.useVirtualLayout = false;
+            this.horizontalAlign = eui.ECS_HORIZONTAL_ALIGN_LEFT;
+            this.gap = 6;
+            this.paddingLeft = 0;
+            this.paddingRight = 0;
+            this.verticalAlign = eui.ECS_VERTICAL_ALIGN_TOP;
+            this.paddingTop = 0;
+            this.paddingBottom = 0;
+            this.typicalWidth = 0;
+            this.typicalHeight = 0;
+        }
+        //======================================================================
+        // Measurement
+        //======================================================================
+        ECSVerticalLayout.prototype.measure = function (container) {
+            var maxWidth = 0;
+            var totalHeight = this.paddingTop + this.paddingBottom;
+            var children = container.$children;
+            if (children) {
+                for (var i = 0; i < children.length; i++) {
+                    var child = children[i];
+                    if (!child.visible || !this.elementIncludeInLayout(child))
+                        continue;
+                    maxWidth = Math.max(maxWidth, this.getElementPreferredSize(child).width);
+                    totalHeight += this.getElementPreferredSize(child).height;
+                    if (i < children.length - 1) {
+                        totalHeight += this.gap;
+                    }
+                }
+            }
+            container.measuredWidth = maxWidth + this.paddingLeft + this.paddingRight;
+            container.measuredHeight = totalHeight;
+        };
+        //======================================================================
+        // Layout
+        //======================================================================
+        ECSVerticalLayout.prototype.layout = function (container, width, height) {
+            var children = container.$children;
+            if (!children)
+                return;
+            var y = this.paddingTop;
+            var contentHeight = height - this.paddingTop - this.paddingBottom;
+            var numElements = 0;
+            // First pass: count visible elements and calculate total height
+            for (var i = 0; i < children.length; i++) {
+                if (children[i].visible && this.elementIncludeInLayout(children[i])) {
+                    numElements++;
+                }
+            }
+            // Calculate excess space for vertical alignment
+            var totalElementHeight = 0;
+            for (var i = 0; i < children.length; i++) {
+                var child = children[i];
+                if (!child.visible || !this.elementIncludeInLayout(child))
+                    continue;
+                totalElementHeight += this.getElementPreferredSize(child).height;
+            }
+            var totalGap = (numElements > 1) ? (numElements - 1) * this.gap : 0;
+            var excessHeight = contentHeight - totalElementHeight - totalGap;
+            // Apply vertical alignment
+            var justifyExtra = 0;
+            if (this.verticalAlign === eui.ECS_VERTICAL_ALIGN_MIDDLE) {
+                y += excessHeight / 2;
+            }
+            else if (this.verticalAlign === eui.ECS_VERTICAL_ALIGN_BOTTOM) {
+                y += excessHeight;
+            }
+            else if (this.verticalAlign === eui.ECS_VERTICAL_ALIGN_JUSTIFY) {
+                // Distribute extra height among elements
+                justifyExtra = numElements > 0 ? excessHeight / numElements : 0;
+            }
+            // Second pass: position elements
+            for (var i = 0; i < children.length; i++) {
+                var child = children[i];
+                if (!child.visible || !this.elementIncludeInLayout(child))
+                    continue;
+                var elementHeight = this.getElementPreferredSize(child).height;
+                // Add extra height for justify
+                if (this.verticalAlign === eui.ECS_VERTICAL_ALIGN_JUSTIFY) {
+                    elementHeight += justifyExtra;
+                }
+                // Calculate x position based on horizontal alignment
+                var x = this.paddingLeft;
+                var elementWidth = this.getElementPreferredSize(child).width;
+                if (this.horizontalAlign === eui.ECS_HORIZONTAL_ALIGN_CENTER) {
+                    x += (width - this.paddingLeft - this.paddingRight - elementWidth) / 2;
+                }
+                else if (this.horizontalAlign === eui.ECS_HORIZONTAL_ALIGN_RIGHT) {
+                    x += width - this.paddingRight - elementWidth;
+                }
+                else if (this.horizontalAlign === eui.ECS_HORIZONTAL_ALIGN_JUSTIFY) {
+                    x = this.paddingLeft;
+                    // For justify, element takes full width
+                    this.setElementBounds(child, x, y, width - this.paddingLeft - this.paddingRight, elementHeight);
+                    y += elementHeight;
+                    if (i < children.length - 1) {
+                        y += this.gap;
+                    }
+                    continue;
+                }
+                this.setElementBounds(child, x, y, elementWidth, elementHeight);
+                y += elementHeight;
+                if (i < children.length - 1) {
+                    y += this.gap;
+                }
+            }
+        };
+        //======================================================================
+        // Helper Methods
+        //======================================================================
+        ECSVerticalLayout.prototype.elementIncludeInLayout = function (element) {
+            if ('includeInLayout' in element) {
+                return element.includeInLayout !== false;
+            }
+            return true;
+        };
+        ECSVerticalLayout.prototype.getElementPreferredSize = function (element) {
+            if ('preferredWidth' in element && 'preferredHeight' in element) {
+                return {
+                    width: element.preferredWidth,
+                    height: element.preferredHeight
+                };
+            }
+            return {
+                width: element.width || 0,
+                height: element.height || 0
+            };
+        };
+        ECSVerticalLayout.prototype.setElementBounds = function (element, x, y, width, height) {
+            element.x = x;
+            element.y = y;
+            element.width = width;
+            element.height = height;
+        };
+        return ECSVerticalLayout;
+    }());
+    eui.ECSVerticalLayout = ECSVerticalLayout;
+    __reflect(ECSVerticalLayout.prototype, "eui.ECSVerticalLayout", ["eui.ECSLayoutStrategy"]);
+    //==========================================================================
+    // ECS Horizontal Layout
+    //==========================================================================
+    /**
+     * @language en_US
+     * ECSHorizontalLayout arranges children in a horizontal row.
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSHorizontalLayout 将子项水平排列。
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    var ECSHorizontalLayout = (function () {
+        function ECSHorizontalLayout() {
+            //======================================================================
+            // Properties
+            //======================================================================
+            this.useVirtualLayout = false;
+            this.horizontalAlign = eui.ECS_HORIZONTAL_ALIGN_LEFT;
+            this.gap = 6;
+            this.paddingLeft = 0;
+            this.paddingRight = 0;
+            this.verticalAlign = eui.ECS_VERTICAL_ALIGN_TOP;
+            this.paddingTop = 0;
+            this.paddingBottom = 0;
+            this.typicalWidth = 0;
+            this.typicalHeight = 0;
+        }
+        //======================================================================
+        // Measurement
+        //======================================================================
+        ECSHorizontalLayout.prototype.measure = function (container) {
+            var totalWidth = this.paddingLeft + this.paddingRight;
+            var maxHeight = 0;
+            var children = container.$children;
+            if (children) {
+                for (var i = 0; i < children.length; i++) {
+                    var child = children[i];
+                    if (!child.visible || !this.elementIncludeInLayout(child))
+                        continue;
+                    var size = this.getElementPreferredSize(child);
+                    totalWidth += size.width;
+                    maxHeight = Math.max(maxHeight, size.height);
+                    if (i < children.length - 1) {
+                        totalWidth += this.gap;
+                    }
+                }
+            }
+            container.measuredWidth = totalWidth;
+            container.measuredHeight = maxHeight + this.paddingTop + this.paddingBottom;
+        };
+        //======================================================================
+        // Layout
+        //======================================================================
+        ECSHorizontalLayout.prototype.layout = function (container, width, height) {
+            var children = container.$children;
+            if (!children)
+                return;
+            var x = this.paddingLeft;
+            var contentWidth = width - this.paddingLeft - this.paddingRight;
+            var numElements = 0;
+            // First pass: count visible elements
+            for (var i = 0; i < children.length; i++) {
+                if (children[i].visible && this.elementIncludeInLayout(children[i])) {
+                    numElements++;
+                }
+            }
+            // Calculate total element width
+            var totalElementWidth = 0;
+            for (var i = 0; i < children.length; i++) {
+                var child = children[i];
+                if (!child.visible || !this.elementIncludeInLayout(child))
+                    continue;
+                totalElementWidth += this.getElementPreferredSize(child).width;
+            }
+            var totalGap = (numElements > 1) ? (numElements - 1) * this.gap : 0;
+            var excessWidth = contentWidth - totalElementWidth - totalGap;
+            // Apply horizontal alignment
+            var justifyExtra = 0;
+            if (this.horizontalAlign === eui.ECS_HORIZONTAL_ALIGN_CENTER) {
+                x += excessWidth / 2;
+            }
+            else if (this.horizontalAlign === eui.ECS_HORIZONTAL_ALIGN_RIGHT) {
+                x += excessWidth;
+            }
+            else if (this.horizontalAlign === eui.ECS_HORIZONTAL_ALIGN_JUSTIFY) {
+                justifyExtra = numElements > 0 ? excessWidth / numElements : 0;
+            }
+            // Calculate y position based on vertical alignment
+            var contentHeight = height - this.paddingTop - this.paddingBottom;
+            // Second pass: position elements
+            for (var i = 0; i < children.length; i++) {
+                var child = children[i];
+                if (!child.visible || !this.elementIncludeInLayout(child))
+                    continue;
+                var elementWidth = this.getElementPreferredSize(child).width;
+                var elementHeight = this.getElementPreferredSize(child).height;
+                // Add extra width for justify
+                if (this.horizontalAlign === eui.ECS_HORIZONTAL_ALIGN_JUSTIFY) {
+                    elementWidth += justifyExtra;
+                }
+                // Calculate y position based on vertical alignment
+                var y = this.paddingTop;
+                if (this.verticalAlign === eui.ECS_VERTICAL_ALIGN_MIDDLE) {
+                    y += (contentHeight - elementHeight) / 2;
+                }
+                else if (this.verticalAlign === eui.ECS_VERTICAL_ALIGN_BOTTOM) {
+                    y += contentHeight - elementHeight;
+                }
+                else if (this.verticalAlign === eui.ECS_VERTICAL_ALIGN_JUSTIFY) {
+                    this.setElementBounds(child, x, y, elementWidth, contentHeight);
+                    x += elementWidth;
+                    if (i < children.length - 1) {
+                        x += this.gap;
+                    }
+                    continue;
+                }
+                this.setElementBounds(child, x, y, elementWidth, elementHeight);
+                x += elementWidth;
+                if (i < children.length - 1) {
+                    x += this.gap;
+                }
+            }
+        };
+        //======================================================================
+        // Helper Methods
+        //======================================================================
+        ECSHorizontalLayout.prototype.elementIncludeInLayout = function (element) {
+            if ('includeInLayout' in element) {
+                return element.includeInLayout !== false;
+            }
+            return true;
+        };
+        ECSHorizontalLayout.prototype.getElementPreferredSize = function (element) {
+            if ('preferredWidth' in element && 'preferredHeight' in element) {
+                return {
+                    width: element.preferredWidth,
+                    height: element.preferredHeight
+                };
+            }
+            return {
+                width: element.width || 0,
+                height: element.height || 0
+            };
+        };
+        ECSHorizontalLayout.prototype.setElementBounds = function (element, x, y, width, height) {
+            element.x = x;
+            element.y = y;
+            element.width = width;
+            element.height = height;
+        };
+        return ECSHorizontalLayout;
+    }());
+    eui.ECSHorizontalLayout = ECSHorizontalLayout;
+    __reflect(ECSHorizontalLayout.prototype, "eui.ECSHorizontalLayout", ["eui.ECSLayoutStrategy"]);
+    //==========================================================================
+    // ECS Tile Layout
+    //==========================================================================
+    /**
+     * @language en_US
+     * ECSTileLayout arranges children in a grid of tiles.
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSTileLayout 将子项排列成网格瓦片布局。
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    var ECSTileLayout = (function () {
+        function ECSTileLayout() {
+            //======================================================================
+            // Properties
+            //======================================================================
+            this.useVirtualLayout = false;
+            this.horizontalAlign = eui.ECS_HORIZONTAL_ALIGN_LEFT;
+            this.gap = 6;
+            this.paddingLeft = 0;
+            this.paddingRight = 0;
+            this.verticalAlign = eui.ECS_VERTICAL_ALIGN_TOP;
+            this.paddingTop = 0;
+            this.paddingBottom = 0;
+            this.typicalWidth = 100;
+            this.typicalHeight = 100;
+            /** Tile orientation: "rows" or "columns" */
+            this.tileOrientation = "rows";
+            /** Requested tile width (NaN for auto) */
+            this.tileWidth = NaN;
+            /** Requested tile height (NaN for auto) */
+            this.tileHeight = NaN;
+        }
+        //======================================================================
+        // Measurement
+        //======================================================================
+        ECSTileLayout.prototype.measure = function (container) {
+            var maxWidth = 0;
+            var maxHeight = 0;
+            var children = container.$children;
+            if (children) {
+                for (var i = 0; i < children.length; i++) {
+                    var child = children[i];
+                    if (!child.visible || !this.elementIncludeInLayout(child))
+                        continue;
+                    var size = this.getElementPreferredSize(child);
+                    maxWidth = Math.max(maxWidth, size.width);
+                    maxHeight = Math.max(maxHeight, size.height);
+                }
+            }
+            var tileW = isNaN(this.tileWidth) ? maxWidth : this.tileWidth;
+            var tileH = isNaN(this.tileHeight) ? maxHeight : this.tileHeight;
+            container.measuredWidth = this.paddingLeft + this.paddingRight;
+            container.measuredHeight = this.paddingTop + this.paddingBottom;
+            if (children) {
+                var count = 0;
+                for (var i = 0; i < children.length; i++) {
+                    if (children[i].visible && this.elementIncludeInLayout(children[i])) {
+                        count++;
+                    }
+                }
+                if (count > 0) {
+                    // Calculate rows and columns
+                    if (this.tileOrientation === "rows") {
+                        var cols = Math.max(1, Math.floor((container.explicitWidth - this.paddingLeft - this.paddingRight + this.gap) /
+                            (tileW + this.gap)));
+                        var rows = Math.ceil(count / cols);
+                        container.measuredWidth += cols * tileW + (cols - 1) * this.gap;
+                        container.measuredHeight += rows * tileH + (rows - 1) * this.gap;
+                    }
+                    else {
+                        var rows = Math.max(1, Math.floor((container.explicitHeight - this.paddingTop - this.paddingBottom + this.gap) /
+                            (tileH + this.gap)));
+                        var cols = Math.ceil(count / rows);
+                        container.measuredWidth += cols * tileW + (cols - 1) * this.gap;
+                        container.measuredHeight += rows * tileH + (rows - 1) * this.gap;
+                    }
+                }
+            }
+        };
+        //======================================================================
+        // Layout
+        //======================================================================
+        ECSTileLayout.prototype.layout = function (container, width, height) {
+            var children = container.$children;
+            if (!children)
+                return;
+            var tileW = isNaN(this.tileWidth) ? this.typicalWidth : this.tileWidth;
+            var tileH = isNaN(this.tileHeight) ? this.typicalHeight : this.tileHeight;
+            // Count visible elements
+            var count = 0;
+            for (var i = 0; i < children.length; i++) {
+                if (children[i].visible && this.elementIncludeInLayout(children[i])) {
+                    count++;
+                }
+            }
+            if (count === 0)
+                return;
+            // Calculate columns based on orientation
+            var cols;
+            var rows;
+            if (this.tileOrientation === "rows") {
+                cols = Math.max(1, Math.floor((width - this.paddingLeft - this.paddingRight + this.gap) / (tileW + this.gap)));
+                rows = Math.ceil(count / cols);
+            }
+            else {
+                rows = Math.max(1, Math.floor((height - this.paddingTop - this.paddingBottom + this.gap) / (tileH + this.gap)));
+                cols = Math.ceil(count / rows);
+            }
+            // Calculate total content size
+            var totalWidth = cols * tileW + (cols - 1) * this.gap;
+            var totalHeight = rows * tileH + (rows - 1) * this.gap;
+            // Calculate offset for alignment
+            var startX = this.paddingLeft;
+            var startY = this.paddingTop;
+            if (this.horizontalAlign === eui.ECS_HORIZONTAL_ALIGN_CENTER) {
+                startX += (width - this.paddingLeft - this.paddingRight - totalWidth) / 2;
+            }
+            else if (this.horizontalAlign === eui.ECS_HORIZONTAL_ALIGN_RIGHT) {
+                startX += width - this.paddingRight - totalWidth;
+            }
+            if (this.verticalAlign === eui.ECS_VERTICAL_ALIGN_MIDDLE) {
+                startY += (height - this.paddingTop - this.paddingBottom - totalHeight) / 2;
+            }
+            else if (this.verticalAlign === eui.ECS_VERTICAL_ALIGN_BOTTOM) {
+                startY += height - this.paddingBottom - totalHeight;
+            }
+            // Position elements
+            var index = 0;
+            for (var i = 0; i < children.length; i++) {
+                var child = children[i];
+                if (!child.visible || !this.elementIncludeInLayout(child))
+                    continue;
+                var col = void 0;
+                var row = void 0;
+                if (this.tileOrientation === "rows") {
+                    col = index % cols;
+                    row = Math.floor(index / cols);
+                }
+                else {
+                    row = index % rows;
+                    col = Math.floor(index / rows);
+                }
+                var x = startX + col * (tileW + this.gap);
+                var y = startY + row * (tileH + this.gap);
+                child.x = x;
+                child.y = y;
+                child.width = tileW;
+                child.height = tileH;
+                index++;
+            }
+        };
+        //======================================================================
+        // Helper Methods
+        //======================================================================
+        ECSTileLayout.prototype.elementIncludeInLayout = function (element) {
+            if ('includeInLayout' in element) {
+                return element.includeInLayout !== false;
+            }
+            return true;
+        };
+        ECSTileLayout.prototype.getElementPreferredSize = function (element) {
+            if ('preferredWidth' in element && 'preferredHeight' in element) {
+                return {
+                    width: element.preferredWidth,
+                    height: element.preferredHeight
+                };
+            }
+            return {
+                width: element.width || this.typicalWidth,
+                height: element.height || this.typicalHeight
+            };
+        };
+        return ECSTileLayout;
+    }());
+    eui.ECSTileLayout = ECSTileLayout;
+    __reflect(ECSTileLayout.prototype, "eui.ECSTileLayout", ["eui.ECSLayoutStrategy"]);
+    //==========================================================================
+    // ECS Basic Layout (absolute positioning)
+    //==========================================================================
+    /**
+     * @language en_US
+     * ECSBasicLayout arranges children according to their individual settings,
+     * without any automatic positioning. Also called absolute layout.
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSBasicLayout 根据子项的各自设置排列，不进行自动定位。也称为绝对布局。
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    var ECSBasicLayout = (function () {
+        function ECSBasicLayout() {
+            //======================================================================
+            // Properties
+            //======================================================================
+            this.useVirtualLayout = false;
+            this.horizontalAlign = eui.ECS_HORIZONTAL_ALIGN_LEFT;
+            this.gap = 0;
+            this.paddingLeft = 0;
+            this.paddingRight = 0;
+            this.verticalAlign = eui.ECS_VERTICAL_ALIGN_TOP;
+            this.paddingTop = 0;
+            this.paddingBottom = 0;
+            this.typicalWidth = 0;
+            this.typicalHeight = 0;
+        }
+        //======================================================================
+        // Measurement
+        //======================================================================
+        ECSBasicLayout.prototype.measure = function (container) {
+            var maxWidth = 0;
+            var maxHeight = 0;
+            var children = container.$children;
+            if (children) {
+                for (var i = 0; i < children.length; i++) {
+                    var child = children[i];
+                    if (!child.visible || !this.elementIncludeInLayout(child))
+                        continue;
+                    maxWidth = Math.max(maxWidth, child.x + child.width);
+                    maxHeight = Math.max(maxHeight, child.y + child.height);
+                }
+            }
+            container.measuredWidth = maxWidth + this.paddingLeft + this.paddingRight;
+            container.measuredHeight = maxHeight + this.paddingTop + this.paddingBottom;
+        };
+        //======================================================================
+        // Layout
+        //======================================================================
+        ECSBasicLayout.prototype.layout = function (container, width, height) {
+            // BasicLayout doesn't automatically position children
+            // They are positioned by their individual x, y, width, height properties
+            // Just apply constraints if needed
+        };
+        //======================================================================
+        // Helper Methods
+        //======================================================================
+        ECSBasicLayout.prototype.elementIncludeInLayout = function (element) {
+            if ('includeInLayout' in element) {
+                return element.includeInLayout !== false;
+            }
+            return true;
+        };
+        return ECSBasicLayout;
+    }());
+    eui.ECSBasicLayout = ECSBasicLayout;
+    __reflect(ECSBasicLayout.prototype, "eui.ECSBasicLayout", ["eui.ECSLayoutStrategy"]);
 })(eui || (eui = {}));
 //////////////////////////////////////////////////////////////////////////////////////
 //

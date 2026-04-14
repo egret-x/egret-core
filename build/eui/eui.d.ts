@@ -12125,6 +12125,425 @@ declare namespace eui {
 }
 declare namespace eui {
     /**
+     * @language en_US
+     * ECS-style dirty flags for efficient component state tracking.
+     * Combines multiple dirty states into a single bitfield.
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECS风格的脏标记，用于高效的组件状态跟踪。
+     * 将多个脏状态组合成单个位域。
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    const ECS_DIRTY_NONE: number;
+    const ECS_DIRTY_PROPERTIES: number;
+    const ECS_DIRTY_MEASURE: number;
+    const ECS_DIRTY_LAYOUT: number;
+    /**
+     * @language en_US
+     * ECSNode is the base class for ECS-style EUI components.
+     * It extends DisplayObjectContainer and provides lifecycle hooks for
+     * properties committing, measuring, and layout.
+     *
+     * Key differences from Component:
+     * - No Skin container layer (reduced display tree depth)
+     * - World scheduler instead of Validator (simpler dirty management)
+     * - Direct function calls instead of IOverride iteration
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSNode 是 ECS 风格 EUI 组件的基类。
+     * 它继承自 DisplayObjectContainer，提供属性提交、测量和布局的生命周期钩子。
+     *
+     * 与 Component 的主要区别：
+     * - 无 Skin 容器层（减少显示树深度）
+     * - World 调度器替代 Validator（更简单的脏管理）
+     * - 直接函数调用替代 IOverride 遍历
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    class ECSNode extends egret.DisplayObjectContainer {
+        /**
+         * Unique node ID assigned by ECSWorld
+         */
+        readonly ecsNodeId: number;
+        /**
+         * Reference to the ECSWorld this node belongs to
+         */
+        $ecsWorld: ECSWorld;
+        /**
+         * Nest level in the display tree (used for traversal order)
+         */
+        nestLevel: number;
+        /** Explicit width set by user */
+        explicitWidth: number;
+        /** Explicit height set by user */
+        explicitHeight: number;
+        /** Measured width from layout */
+        measuredWidth: number;
+        /** Measured height from layout */
+        measuredHeight: number;
+        /** Layout width (after constraints applied) */
+        layoutWidth: number;
+        /** Layout height (after constraints applied) */
+        layoutHeight: number;
+        left: number;
+        right: number;
+        top: number;
+        bottom: number;
+        horizontalCenter: number;
+        verticalCenter: number;
+        percentWidth: number;
+        percentHeight: number;
+        /**
+         * Dirty bitfield - combines ECS_DIRTY_PROPERTIES, ECS_DIRTY_MEASURE, ECS_DIRTY_LAYOUT
+         */
+        ecsDirty: number;
+        constructor();
+        /**
+         * Called when children should be created. Equivalent to createChildren().
+         * @internal
+         */
+        $createChildren(): void;
+        /**
+         * Called when properties should be committed.
+         * This is where state changes, binding updates, etc. happen.
+         * @internal
+         */
+        $commitProperties(): void;
+        /**
+         * Called when measurement should be performed.
+         * Should set measuredWidth and measuredHeight.
+         * @internal
+         */
+        $measure(): void;
+        /**
+         * Called when layout should be performed.
+         * Should position and size children based on layout rules.
+         * @internal
+         */
+        $doLayout(): void;
+        /**
+         * Mark properties as dirty, requiring $commitProperties() in next flush.
+         */
+        invalidateProperties(): void;
+        /**
+         * Mark size as dirty, requiring $measure() in next flush.
+         */
+        invalidateSize(): void;
+        /**
+         * Mark display list as dirty, requiring $doLayout() in next flush.
+         */
+        invalidateDisplayList(): void;
+        /**
+         * Immediately validate and flush all dirty states.
+         * Use with caution - bypasses the normal frame batching.
+         */
+        validateNow(): void;
+        /**
+         * Check if this node has any dirty flags set.
+         */
+        isDirty(): boolean;
+        /**
+         * Clear all dirty flags.
+         */
+        clearDirty(): void;
+        /**
+         * Register this node with an ECSWorld.
+         * @internal
+         */
+        $register(world: ECSWorld): void;
+        /**
+         * Unregister this node from its ECSWorld.
+         * @internal
+         */
+        $unregister(): void;
+        /**
+         * Update nest level based on parent's level.
+         * @internal
+         */
+        $onParentChanged(): void;
+        /**
+         * Update nest level recursively.
+         */
+        private updateNestLevel();
+        /**
+         * Dispose this node and all its children.
+         */
+        dispose(): void;
+    }
+    /**
+     * @language en_US
+     * ECSContainer is an ECSNode with layout support.
+     * It holds an ECSLayoutStrategy reference and delegates measurement/layout to it.
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSContainer 是支持布局的 ECSNode。
+     * 它持有 ECSLayoutStrategy 引用，并将测量/布局委托给它。
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    class ECSContainer extends ECSNode {
+        /** The layout strategy used by this container */
+        layout: ECSLayoutStrategy;
+        /** Whether layout should be automatically updated */
+        autoLayout: boolean;
+        private _contentWidth;
+        private _contentHeight;
+        /** Horizontal scroll position */
+        private _scrollH;
+        /** Vertical scroll position */
+        private _scrollV;
+        /** Whether scroll is enabled */
+        private _scrollEnabled;
+        private _scrollRect;
+        private _isScrolling;
+        $measure(): void;
+        $doLayout(): void;
+        /**
+         * Set the layout strategy.
+         */
+        setLayout(strategy: ECSLayoutStrategy): void;
+        /**
+         * Set element at index to visible/invisible for virtual layout.
+         */
+        setElementVisible(index: number, visible: boolean): void;
+        /**
+         * Get visible range for virtual layout.
+         */
+        getVisibleRange(): [number, number];
+        /**
+         * Setup virtual layout support.
+         */
+        private setupVirtualLayout();
+        /**
+         * Called when scroll begins - pause layout validation
+         */
+        setScrollBegin(): void;
+        /**
+         * Called when scroll ends - resume layout validation
+         */
+        setScrollEnd(): void;
+        /**
+         * Check if currently scrolling
+         */
+        readonly isScrolling: boolean;
+        scrollH: number;
+        scrollV: number;
+        scrollEnabled: boolean;
+        contentWidth: number;
+        contentHeight: number;
+        private updateScrollRect();
+        /**
+         * Calculate total content width based on children.
+         */
+        private calculateContentWidth();
+        /**
+         * Calculate total content height based on children.
+         */
+        private calculateContentHeight();
+        /**
+         * Get element at specific index.
+         */
+        getElementAt(index: number): egret.DisplayObject;
+        /**
+         * Get number of elements.
+         */
+        readonly numElements: number;
+        /**
+         * Dispose this container and its children.
+         */
+        dispose(): void;
+    }
+    /**
+     * @language en_US
+     * ECSLayoutStrategy defines the interface for ECS-style layout algorithms.
+     * Unlike the old LayoutBase which extends EventDispatcher and holds state,
+     * ECSLayoutStrategy is a pure function object with no state and no events.
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSLayoutStrategy 定义了 ECS 风格布局算法的接口。
+     * 与旧的继承 EventDispatcher 并持有状态的 LayoutBase 不同，
+     * ECSLayoutStrategy 是无状态、无事件的纯函数对象。
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    interface ECSLayoutStrategy {
+        /**
+         * Whether virtual layout is enabled.
+         * Virtual layout only works with ECSContainer that has virtual list support.
+         */
+        useVirtualLayout: boolean;
+        /**
+         * The horizontal alignment of layout elements.
+         * Valid values: "left", "center", "right", "justify"
+         */
+        horizontalAlign: string;
+        /**
+         * The gap between elements in pixels.
+         */
+        gap: number;
+        /**
+         * Padding on the left in pixels.
+         */
+        paddingLeft: number;
+        /**
+         * Padding on the right in pixels.
+         */
+        paddingRight: number;
+        /**
+         * The vertical alignment of layout elements.
+         * Valid values: "top", "middle", "bottom", "justify"
+         */
+        verticalAlign: string;
+        /**
+         * Padding on the top in pixels.
+         */
+        paddingTop: number;
+        /**
+         * Padding on the bottom in pixels.
+         */
+        paddingBottom: number;
+        /**
+         * Typical item width (for virtual layout calculation).
+         */
+        typicalWidth: number;
+        /**
+         * Typical item height (for virtual layout calculation).
+         */
+        typicalHeight: number;
+        /**
+         * Measure the container and calculate its preferred size.
+         * @param container The container to measure
+         */
+        measure(container: ECSContainer): void;
+        /**
+         * Layout the container's children.
+         * @param container The container to layout
+         * @param width The available width
+         * @param height The available height
+         */
+        layout(container: ECSContainer, width: number, height: number): void;
+        /**
+         * Get the visible range for virtual layout.
+         * @param scrollV The vertical scroll position
+         * @param height The viewport height
+         * @returns [startIndex, endIndex] of visible items
+         */
+        getVisibleRange?(scrollV: number, height: number): [number, number];
+    }
+    const ECS_HORIZONTAL_ALIGN_LEFT = "left";
+    const ECS_HORIZONTAL_ALIGN_CENTER = "center";
+    const ECS_HORIZONTAL_ALIGN_RIGHT = "right";
+    const ECS_HORIZONTAL_ALIGN_JUSTIFY = "justify";
+    const ECS_VERTICAL_ALIGN_TOP = "top";
+    const ECS_VERTICAL_ALIGN_MIDDLE = "middle";
+    const ECS_VERTICAL_ALIGN_BOTTOM = "bottom";
+    const ECS_VERTICAL_ALIGN_JUSTIFY = "justify";
+    /**
+     * @language en_US
+     * ECSWorld is the scheduler that replaces Validator.
+     * It manages dirty nodes and flushes them in three ordered passes:
+     * 1. Properties (parent before child, shallow to deep)
+     * 2. Measure (child before parent, deep to shallow)
+     * 3. Layout (parent before child, shallow to deep)
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSWorld 是替代 Validator 的调度器。
+     * 它管理脏节点并在三趟有序遍历中刷新：
+     * 1. 属性提交（父先于子，浅到深）
+     * 2. 测量（子先于父，深到浅）
+     * 3. 布局（父先于子，浅到深）
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    class ECSWorld {
+        /**
+         * Global singleton instance
+         */
+        static readonly instance: ECSWorld;
+        /**
+         * Generate next unique node ID
+         */
+        static nextId(): number;
+        private static _idSeq;
+        /** Nodes with dirty properties */
+        private propertiesDirty;
+        /** Nodes with dirty measure */
+        private measureDirty;
+        /** Nodes with dirty layout */
+        private layoutDirty;
+        /** Whether tick is currently active */
+        private tickActive;
+        /** Frame callback bound to this context */
+        private tickCallback;
+        constructor();
+        /**
+         * Mark a node as dirty with specified flags.
+         * @param node The node to mark dirty
+         * @param flag Dirty flags (can be combined with bitwise OR)
+         */
+        markDirty(node: ECSNode, flag: number): void;
+        /**
+         * Validate a single node immediately, bypassing the queue.
+         * @param node The node to validate
+         */
+        validateNode(node: ECSNode): void;
+        /**
+         * Manually flush all dirty nodes. Usually called by tick.
+         * @returns Whether any work was done
+         */
+        flush(): boolean;
+        /**
+         * Check if there are any dirty nodes.
+         */
+        isDirty(): boolean;
+        /**
+         * Get count of dirty nodes (for debugging).
+         */
+        getDirtyCount(): number;
+        /**
+         * Clear all dirty queues (for debugging/testing).
+         */
+        clear(): void;
+        /**
+         * Frame tick callback
+         */
+        private onTick(timeStamp);
+        /**
+         * Sort nodes by nestLevel ascending (shallow first)
+         */
+        private sortAscending(nodes);
+        /**
+         * Sort nodes by nestLevel descending (deep first)
+         */
+        private sortDescending(nodes);
+    }
+}
+declare namespace eui {
+    /**
      * The eui.CollectionEvent class represents an event that is
      * dispatched when the associated collection changes.
      * @version Egret 2.4
@@ -14605,6 +15024,136 @@ declare namespace eui {
          * @platform Web,Native
          */
         protected getIndexInView(): boolean;
+    }
+}
+declare namespace eui {
+    /**
+     * @language en_US
+     * ECSVerticalLayout arranges children in a vertical stack.
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSVerticalLayout 将子项垂直堆叠排列。
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    class ECSVerticalLayout implements ECSLayoutStrategy {
+        useVirtualLayout: boolean;
+        horizontalAlign: string;
+        gap: number;
+        paddingLeft: number;
+        paddingRight: number;
+        verticalAlign: string;
+        paddingTop: number;
+        paddingBottom: number;
+        typicalWidth: number;
+        typicalHeight: number;
+        measure(container: ECSContainer): void;
+        layout(container: ECSContainer, width: number, height: number): void;
+        private elementIncludeInLayout(element);
+        private getElementPreferredSize(element);
+        private setElementBounds(element, x, y, width, height);
+    }
+    /**
+     * @language en_US
+     * ECSHorizontalLayout arranges children in a horizontal row.
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSHorizontalLayout 将子项水平排列。
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    class ECSHorizontalLayout implements ECSLayoutStrategy {
+        useVirtualLayout: boolean;
+        horizontalAlign: string;
+        gap: number;
+        paddingLeft: number;
+        paddingRight: number;
+        verticalAlign: string;
+        paddingTop: number;
+        paddingBottom: number;
+        typicalWidth: number;
+        typicalHeight: number;
+        measure(container: ECSContainer): void;
+        layout(container: ECSContainer, width: number, height: number): void;
+        private elementIncludeInLayout(element);
+        private getElementPreferredSize(element);
+        private setElementBounds(element, x, y, width, height);
+    }
+    /**
+     * @language en_US
+     * ECSTileLayout arranges children in a grid of tiles.
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSTileLayout 将子项排列成网格瓦片布局。
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    class ECSTileLayout implements ECSLayoutStrategy {
+        useVirtualLayout: boolean;
+        horizontalAlign: string;
+        gap: number;
+        paddingLeft: number;
+        paddingRight: number;
+        verticalAlign: string;
+        paddingTop: number;
+        paddingBottom: number;
+        typicalWidth: number;
+        typicalHeight: number;
+        /** Tile orientation: "rows" or "columns" */
+        tileOrientation: string;
+        /** Requested tile width (NaN for auto) */
+        tileWidth: number;
+        /** Requested tile height (NaN for auto) */
+        tileHeight: number;
+        measure(container: ECSContainer): void;
+        layout(container: ECSContainer, width: number, height: number): void;
+        private elementIncludeInLayout(element);
+        private getElementPreferredSize(element);
+    }
+    /**
+     * @language en_US
+     * ECSBasicLayout arranges children according to their individual settings,
+     * without any automatic positioning. Also called absolute layout.
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    /**
+     * @language zh_CN
+     * ECSBasicLayout 根据子项的各自设置排列，不进行自动定位。也称为绝对布局。
+     *
+     * @version eui 1.0
+     * @platform Web,Native
+     */
+    class ECSBasicLayout implements ECSLayoutStrategy {
+        useVirtualLayout: boolean;
+        horizontalAlign: string;
+        gap: number;
+        paddingLeft: number;
+        paddingRight: number;
+        verticalAlign: string;
+        paddingTop: number;
+        paddingBottom: number;
+        typicalWidth: number;
+        typicalHeight: number;
+        measure(container: ECSContainer): void;
+        layout(container: ECSContainer, width: number, height: number): void;
+        private elementIncludeInLayout(element);
     }
 }
 declare namespace eui.sys {
